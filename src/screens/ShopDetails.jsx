@@ -61,6 +61,19 @@ export default function ShopDetails() {
           <p className="text-sm text-ink/70 leading-relaxed">{display.note}</p>
         )}
 
+        {display.status !== STATUS.OPEN && display.confirmedOpeningTime && (
+          <div className="rounded-xl2 px-4 py-3 flex items-center justify-between" style={{ backgroundColor: '#FBF0DD' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: '#C77F1A' }}>
+                Confirmed opening: {display.confirmedOpeningTime}
+              </p>
+              <p className="text-xs text-ink/45 mt-0.5">
+                Confirmed by owner {timeAgo(display.confirmedAt)}
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-1">
           <p className="text-xs uppercase tracking-wide text-ink/40 font-medium">Address</p>
           <p className="text-sm text-ink/80">{display.address || 'Address unavailable'}</p>
