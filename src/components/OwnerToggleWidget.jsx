@@ -8,9 +8,8 @@ const QUICK_OPTIONS = [
   { key: STATUS.CLOSING_EARLY, label: 'Closing early' },
 ]
 
-export default function OwnerToggleWidget({ shop, onUpdate, onConfirmOpening }) {
+export default function OwnerToggleWidget({ shop, onUpdate }) {
   const [expanded, setExpanded] = useState(false)
-  const [time, setTime] = useState(shop.confirmedOpeningTime || '09:00')
   const meta = STATUS_META[shop.status]
 
   return (
@@ -59,31 +58,6 @@ export default function OwnerToggleWidget({ shop, onUpdate, onConfirmOpening }) 
                 </button>
               )
             })}
-
-            <div className="col-span-2 border-t border-ink/10 mt-1 pt-3">
-              <p className="text-xs text-ink/50 mb-2">
-                Not open yet? Confirm today's opening time so customers know it's real:
-              </p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  className="flex-1 border border-ink/15 rounded-xl px-3 py-2 text-sm bg-paper outline-none focus:border-accent"
-                />
-                <button
-                  onClick={() => onConfirmOpening(time)}
-                  className="bg-accent text-white rounded-xl px-3 py-2 text-sm font-medium whitespace-nowrap"
-                >
-                  Confirm
-                </button>
-              </div>
-              {shop.confirmedOpeningTime && (
-                <p className="text-xs text-ink/40 mt-1.5">
-                  Currently confirmed: opens {shop.confirmedOpeningTime}
-                </p>
-              )}
-            </div>
           </div>
         )}
       </div>
