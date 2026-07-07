@@ -34,6 +34,18 @@ export function AppProvider({ children }) {
     )
   }
 
+  // Owner "vouches" for a specific opening time today — separate from live status,
+  // so a shop that's currently closed can still tell customers a trusted time to arrive.
+  function confirmOpeningTime(placeId, time) {
+    setShops((prev) =>
+      prev.map((s) =>
+        s.placeId === placeId
+          ? { ...s, confirmedOpeningTime: time, confirmedAt: Date.now() }
+          : s
+      )
+    )
+  }
+
   function getOwnerShop(ownerId) {
     const owner = mockOwners.find((o) => o.id === ownerId)
     if (!owner) return null
@@ -42,7 +54,7 @@ export function AppProvider({ children }) {
 
   return (
     <AppCtx.Provider
-      value={{ session, loginWithIdentifier, logout, shops, updateShopStatus, getOwnerShop }}
+      value={{ session, loginWithIdentifier, logout, shops, updateShopStatus, confirmOpeningTime, getOwnerShop }}
     >
       {children}
     </AppCtx.Provider>

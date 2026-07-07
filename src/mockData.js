@@ -32,6 +32,10 @@ export const mockShops = [
     note: 'Closed for stock renewal, opens tomorrow 10 AM',
     updatedAt: Date.now() - 1000 * 60 * 40, // 40 min ago
     ownerId: 'owner-1',
+    // NEW: a separate, owner-confirmed promise about when it will open today —
+    // distinct from `status`, so "closed right now" doesn't hide "confirmed open at 9".
+    confirmedOpeningTime: '09:00',
+    confirmedAt: Date.now() - 1000 * 60 * 40,
   },
   {
     placeId: 'ChIJmock_saravana_stores',
@@ -68,6 +72,8 @@ export const mockShops = [
     note: '',
     updatedAt: null,
     ownerId: null,
+    confirmedOpeningTime: null,
+    confirmedAt: null,
   },
 ]
 
