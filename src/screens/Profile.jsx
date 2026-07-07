@@ -13,10 +13,14 @@ const ALL_OPTIONS = [
 ]
 
 export default function Profile() {
-  const { session, logout, getOwnerShop, updateShopStatus } = useApp()
+  const { session, logout, getOwnerShop, updateShopStatus, confirmOpeningTime } = useApp()
   const [tomorrow, setTomorrow] = useState(STATUS.OPEN)
+  const [editing, setEditing] = useState(false)
+  const [time, setTime] = useState('09:00')
 
   const ownerShop = session.role === 'owner' ? getOwnerShop(session.ownerId) : null
+  const hasConfirmed = !!ownerShop?.confirmedOpeningTime
+  const showControls = editing || !hasConfirmed
 
   return (
     <div className="relative w-full h-full flex flex-col">
@@ -42,29 +46,78 @@ export default function Profile() {
               <p className="text-xs text-ink/40">{timeAgo(ownerShop.updatedAt)}</p>
             </div>
 
-            <div>
-              <p className="text-xs uppercase tracking-wide text-ink/40 font-medium mb-2">
-                Today's status
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {ALL_OPTIONS.map((opt) => {
-                  const active = ownerShop.status === opt.key
-                  return (
-                    <button
-                      key={opt.key}
-                      onClick={() => updateShopStatus(ownerShop.placeId, opt.key)}
-                      className={`rounded-xl py-2.5 text-sm font-medium border transition-colors ${
-                        active
-                          ? 'bg-accent text-white border-accent'
-                          : 'bg-paper text-ink/70 border-ink/10'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  )
-                })}
+            {!showControls && (
+              <div className="flex items-center justify-between bg-paper rounded-xl px-3.5 py-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-ink/40 font-medium mb-1">
+                    Today
+                  </p>
+                  <p className="text-sm font-medium text-ink">
+                    {STATUS_META[ownerShop.status].label}
+                    {ownerShop.confirmedOpeningTime && ownerShop.status !== STATUS.OPEN
+                      ? ` · confirmed opening ${ownerShop.confirmedOpeningTime}`
+                      : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setEditing(true); setTime(ownerShop.confirmedOpeningTime || '09:00') }}
+                  className="text-sm font-medium text-accent shrink-0 ml-3"
+                >
+                  Edit
+                </button>
               </div>
-            </div>
+            )}
+
+            {showControls && (
+              <>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-ink/40 font-medium mb-2">
+                    Today's status
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {ALL_OPTIONS.map((opt) => {
+                      const active = ownerShop.status === opt.key
+                      return (
+                        <button
+                          key={opt.key}
+                          onClick={() => updateShopStatus(ownerShop.placeId, opt.key)}
+                          className={`rounded-xl py-2.5 text-sm font-medium border transition-colors ${
+                            active
+                              ? 'bg-accent text-white border-accent'
+                              : 'bg-paper text-ink/70 border-ink/10'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-ink/40 font-medium mb-2">
+                    Confirm today's opening time
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      value={time}
+                      onChange={(e) => setTime(e.target.value)}
+                      className="flex-1 border border-ink/15 rounded-xl px-3 py-2.5 text-sm bg-paper outline-none focus:border-accent"
+                    />
+                    <button
+                      onClick={() => { confirmOpeningTime(ownerShop.placeId, time); setEditing(false) }}
+                      className="bg-accent text-white rounded-xl px-4 py-2.5 text-sm font-medium whitespace-nowrap"
+                    >
+                      Confirm
+                    </button>
+                  </div>
+                  <p className="text-xs text-ink/40 mt-2">
+                    Lets customers know a specific opening time is real, even while you're still showing closed.
+                  </p>
+                </div>
+              </>
+            )}
 
             <div>
               <p className="text-xs uppercase tracking-wide text-ink/40 font-medium mb-2">
