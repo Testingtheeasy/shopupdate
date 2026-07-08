@@ -1,8 +1,7 @@
 import React from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useApp } from '../AppContext.jsx'
-import { STATUS, STATUS_META } from '../mockData.js'
-import { timeAgo, isStale } from '../lib/time.js'
+import { getDisplayStatus, DISPLAY_META, DISPLAY } from '../lib/statusEngine.js'
 
 export default function ShopDetails() {
   const { placeId } = useParams()
@@ -12,25 +11,18 @@ export default function ShopDetails() {
 
   const shop = shops.find((s) => s.placeId === placeId) || null
 
-  // Fallback for a place found via search that isn't in our DB yet.
-  const display = shop || {
-    name: state?.name || 'Unknown shop',
-    address: state?.address || '',
-    lat: state?.lat,
-    lng: state?.lng,
-    phone: null,
-    status: STATUS.UNVERIFIED,
-    note: '',
-    updatedAt: null,
-  }
+  const display = shop ? getDisplayStatus(shop) : DISPLAY.UNVERIFIED
+  const meta = DISPLAY_META[display]
 
-  const stale = isStale(display.updatedAt)
-  const effectiveStatus = stale && display.status !== STATUS.UNVERIFIED ? display.status : display.status
-  const meta = STATUS_META[effectiveStatus]
+  const name = shop?.name || state?.name || 'Unknown shop'
+  const address = shop?.address || state?.address || ''
+  const lat = shop?.lat ?? state?.lat
+  const lng = shop?.lng ?? state?.lng
+  const phone = shop?.phone
 
-  const navUrl = display.lat && display.lng
-    ? `https://www.google.com/maps/dir/?api=1&destination=${display.lat},${display.lng}&destination_place_id=${placeId !== 'unknown' ? placeId : ''}`
-    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(display.name)}`
+  const navUrl = lat && lng
+    ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=${placeId !== 'unknown' ? placeId : ''}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`
 
   return (
     <div className="relative w-full h-full flex flex-col">
@@ -40,51 +32,34 @@ export default function ShopDetails() {
             <path d="M15 18l-6-6 6-6" stroke="#14231D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <h1 className="font-display text-lg font-600 truncate">{display.name}</h1>
+        <h1 className="font-display text-lg font-600 truncate">{name}</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-        <div
-          className="rounded-xl2 px-4 py-3.5 flex items-center justify-between"
-          style={{ backgroundColor: meta.bg }}
-        >
-          <div className="flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: meta.color }} />
-            <span className="font-medium text-sm" style={{ color: meta.color }}>
-              {stale && display.status !== STATUS.UNVERIFIED ? 'Status may be outdated' : meta.label}
-            </span>
-          </div>
-          <span className="text-xs text-ink/50">{timeAgo(display.updatedAt)}</span>
+        <div className="rounded-xl2 px-4 py-3.5 flex items-center gap-2.5" style={{ backgroundColor: meta.bg }}>
+          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: meta.color, opacity: meta.opacity }} />
+          <span className="font-medium text-sm" style={{ color: meta.color }}>{meta.label}</span>
         </div>
 
-        {display.note && (
-          <p className="text-sm text-ink/70 leading-relaxed">{display.note}</p>
-        )}
-
-        {display.status !== STATUS.OPEN && display.confirmedOpeningTime && (
-          <div className="rounded-xl2 px-4 py-3 flex items-center justify-between" style={{ backgroundColor: '#FBF0DD' }}>
-            <div>
-              <p className="text-sm font-medium" style={{ color: '#C77F1A' }}>
-                Confirmed opening: {display.confirmedOpeningTime}
-              </p>
-              <p className="text-xs text-ink/45 mt-0.5">
-                Confirmed by owner {timeAgo(display.confirmedAt)}
-              </p>
-            </div>
+        {shop?.schedule && (
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-wide text-ink/40 font-medium">Usual hours</p>
+            <p className="text-sm text-ink/80">{shop.schedule.openTime} – {shop.schedule.closeTime}</p>
+            {shop.schedule.hasBreak && shop.schedule.breaks[0] && (
+              <p className="text-xs text-ink/45">Break {shop.schedule.breaks[0].start} – {shop.schedule.breaks[0].end}</p>
+            )}
           </div>
         )}
 
         <div className="space-y-1">
           <p className="text-xs uppercase tracking-wide text-ink/40 font-medium">Address</p>
-          <p className="text-sm text-ink/80">{display.address || 'Address unavailable'}</p>
+          <p className="text-sm text-ink/80">{address || 'Address unavailable'}</p>
         </div>
 
-        {display.phone && (
+        {phone && (
           <div className="space-y-1">
             <p className="text-xs uppercase tracking-wide text-ink/40 font-medium">Phone</p>
-            <a href={`tel:${display.phone}`} className="text-sm text-accent font-medium">
-              {display.phone}
-            </a>
+            <a href={`tel:${phone}`} className="text-sm text-accent font-medium">{phone}</a>
           </div>
         )}
 

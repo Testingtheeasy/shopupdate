@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../AppContext.jsx'
 import GoogleMap from '../components/GoogleMap.jsx'
@@ -9,7 +9,7 @@ import OwnerToggleWidget from '../components/OwnerToggleWidget.jsx'
 const CHENNAI_CENTER = { lat: 13.0418, lng: 80.2341 }
 
 export default function MapHome() {
-  const { session, shops, updateShopStatus, getOwnerShop } = useApp()
+  const { session, shops, confirmOpen, setOverride, startBreak, endBreakNow, getOwnerShop } = useApp()
   const navigate = useNavigate()
   const [center] = useState(CHENNAI_CENTER)
 
@@ -20,7 +20,6 @@ export default function MapHome() {
       const match = shops.find((s) => s.placeId === place.place_id)
       if (match) navigate(`/shop/${match.placeId}`)
       else {
-        // Not in our DB yet — still useful: show it as unverified via place details screen.
         navigate(`/shop/unknown`, {
           state: {
             placeId: place.place_id,
@@ -48,7 +47,10 @@ export default function MapHome() {
       {ownerShop && (
         <OwnerToggleWidget
           shop={ownerShop}
-          onUpdate={(status) => updateShopStatus(ownerShop.placeId, status)}
+          onConfirm={() => confirmOpen(ownerShop.placeId)}
+          onNotOpeningToday={() => setOverride(ownerShop.placeId, 'today', 'closed')}
+          onStartBreak={(minutes) => startBreak(ownerShop.placeId, minutes)}
+          onEndBreak={() => endBreakNow(ownerShop.placeId)}
         />
       )}
       <BottomNav />
