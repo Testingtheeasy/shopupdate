@@ -7,7 +7,10 @@ import ShopDetails from './screens/ShopDetails.jsx'
 import Profile from './screens/Profile.jsx'
 
 function Gate({ children }) {
-  const { session } = useApp()
+  const { session, authLoading } = useApp()
+  if (authLoading) {
+    return <div className="h-full flex items-center justify-center text-ink/40 text-sm">Loading…</div>
+  }
   if (!session) return <Navigate to="/login" replace />
   return children
 }

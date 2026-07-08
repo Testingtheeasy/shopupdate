@@ -1,85 +1,100 @@
-import React, { createContext, useContext, useState } from 'react'
-import { mockShops, mockOwners } from './mockData.js'
+import React, { createContext, useContext, useEffect, useState } from 'react'
+import {
+  collection, onSnapshot, doc, updateDoc, query, where, getDocs,
+} from 'firebase/firestore'
+import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth'
+import { db, auth, googleProvider } from './lib/firebase.js'
 
 const AppCtx = createContext(null)
 
 export function AppProvider({ children }) {
-  const [session, setSession] = useState(null) // { role: 'user'|'owner', ownerId?, identifier }
-  const [shops, setShops] = useState(mockShops)
+  const [session, setSession] = useState(null)     // { role, ownerId?, identifier, uid }
+  const [shops, setShops] = useState([])
+  const [authLoading, setAuthLoading] = useState(true)
 
-  function loginWithIdentifier(identifier) {
-    const clean = identifier.trim().toLowerCase()
-    const owner = mockOwners.find(
-      (o) => o.email.toLowerCase() === clean || o.phone === clean.replace(/\D/g, '')
-    )
-    if (owner) {
-      setSession({ role: 'owner', ownerId: owner.id, identifier })
-      return true
-    } else {
-      setSession({ role: 'user', identifier })
-      return false
-    }
+  // Live shop list — any change anywhere (owner action, another customer's
+  // browser) reflects here automatically, no manual refresh needed.
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'shops'), (snap) => {
+      setShops(snap.docs.map((d) => ({ placeId: d.id, ...d.data() })))
+    })
+    return unsub
+  }, [])
+
+  // Resolve role on auth state change: check the `owners` collection for a
+  // document whose email matches the signed-in Google account.
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setSession(null)
+        setAuthLoading(false)
+        return
+      }
+      const ownersQuery = query(collection(db, 'owners'), where('email', '==', user.email))
+      const ownerSnap = await getDocs(ownersQuery)
+      if (!ownerSnap.empty) {
+        const ownerDoc = ownerSnap.docs[0]
+        setSession({ role: 'owner', ownerId: ownerDoc.id, identifier: user.email, uid: user.uid })
+      } else {
+        setSession({ role: 'user', identifier: user.email, uid: user.uid })
+      }
+      setAuthLoading(false)
+    })
+    return unsub
+  }, [])
+
+  async function loginWithGoogle() {
+    await signInWithPopup(auth, googleProvider)
+    // session gets set by onAuthStateChanged above; caller can check
+    // auth.currentUser or just navigate to '/' and let the Gate route
+    // owners onward once session resolves (see Login.jsx).
   }
 
   function logout() {
-    setSession(null)
+    signOut(auth)
   }
 
-  function patchShop(placeId, patch) {
-    setShops((prev) => prev.map((s) => (s.placeId === placeId ? { ...s, ...patch } : s)))
+  async function patchShop(placeId, patch) {
+    await updateDoc(doc(db, 'shops', placeId), patch)
   }
 
-  // Owner taps "I'm open" / confirm — whether that's on-time or ahead of schedule
-  // (90 min early etc), it's the same action: stamp confirmedAt = now.
   function confirmOpen(placeId) {
-    patchShop(placeId, { confirmedAt: Date.now(), todayOverride: null, customOpenLabel: null })
+    return patchShop(placeId, { confirmedAt: Date.now(), todayOverride: null, customOpenLabel: null })
   }
 
-  // Owner is opening, but later than scheduled, or at a specific custom time.
-  // Still counts as "confirmed" for the engine, but carries a label so the UI
-  // can show "Opening at 11:30 (confirmed)" instead of the default open message.
   function confirmCustomTime(placeId, timeLabel) {
-    patchShop(placeId, { confirmedAt: Date.now(), todayOverride: null, customOpenLabel: timeLabel })
+    return patchShop(placeId, { confirmedAt: Date.now(), todayOverride: null, customOpenLabel: timeLabel })
   }
 
-  // "Not opening today" / "Not opening tomorrow" — cancels the whole reminder
-  // cascade for that date. Same control, different target date.
   function setOverride(placeId, which, value) {
-    // which: 'today' | 'tomorrow'; value: 'closed' | 'open' | null
-    patchShop(placeId, which === 'today' ? { todayOverride: value } : { tomorrowOverride: value })
+    return patchShop(placeId, which === 'today' ? { todayOverride: value } : { tomorrowOverride: value })
   }
 
-  // Break control covers both the scheduled break (auto-triggered) and the
-  // ad-hoc "need 10 min" case — both just set breakUntil, engine handles the rest.
   function startBreak(placeId, minutes) {
-    patchShop(placeId, { breakUntil: Date.now() + minutes * 60 * 1000 })
+    return patchShop(placeId, { breakUntil: Date.now() + minutes * 60 * 1000 })
   }
 
   function endBreakNow(placeId) {
-    patchShop(placeId, { breakUntil: null })
+    return patchShop(placeId, { breakUntil: null })
   }
 
-  function updateSchedule(placeId, scheduleUpdates) {
-    setShops((prev) =>
-      prev.map((s) =>
-        s.placeId === placeId
-          ? { ...s, schedule: { ...s.schedule, ...scheduleUpdates } }
-          : s
-      )
-    )
+  async function updateSchedule(placeId, scheduleUpdates) {
+    const shop = shops.find((s) => s.placeId === placeId)
+    const nextSchedule = { ...(shop?.schedule || {}), ...scheduleUpdates }
+    await patchShop(placeId, { schedule: nextSchedule })
   }
 
   function getOwnerShop(ownerId) {
-    const owner = mockOwners.find((o) => o.id === ownerId)
-    if (!owner) return null
-    return shops.find((s) => s.placeId === owner.shopPlaceId) || null
+    const shop = shops.find((s) => s.ownerId === ownerId)
+    return shop || null
   }
 
   return (
     <AppCtx.Provider
       value={{
         session,
-        loginWithIdentifier,
+        authLoading,
+        loginWithGoogle,
         logout,
         shops,
         confirmOpen,
