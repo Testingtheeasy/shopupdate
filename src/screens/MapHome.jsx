@@ -4,16 +4,15 @@ import { useApp } from '../AppContext.jsx'
 import GoogleMap from '../components/GoogleMap.jsx'
 import SearchBar from '../components/SearchBar.jsx'
 import BottomNav from '../components/BottomNav.jsx'
-import OwnerToggleWidget from '../components/OwnerToggleWidget.jsx'
 
 const CHENNAI_CENTER = { lat: 13.0418, lng: 80.2341 }
 
+// Map is read-only for everyone, including owners — no edit controls live
+// here. Owners manage their shop entirely from the Shop Update tab.
 export default function MapHome() {
-  const { session, shops, confirmOpen, setOverride, startBreak, endBreakNow, getOwnerShop } = useApp()
+  const { shops, session } = useApp()
   const navigate = useNavigate()
   const [center] = useState(CHENNAI_CENTER)
-
-  const ownerShop = session.role === 'owner' ? getOwnerShop(session.ownerId) : null
 
   const handlePlaceSelected = useCallback(
     (place) => {
@@ -39,21 +38,10 @@ export default function MapHome() {
   return (
     <div className="relative w-full h-full">
       <GoogleMap shops={shops} center={center} onPinClick={handlePinClick} />
-
       <div className="absolute top-4 left-4 right-4 z-10">
         <SearchBar onPlaceSelected={handlePlaceSelected} />
       </div>
-
-      {ownerShop && (
-        <OwnerToggleWidget
-          shop={ownerShop}
-          onConfirm={() => confirmOpen(ownerShop.placeId)}
-          onNotOpeningToday={() => setOverride(ownerShop.placeId, 'today', 'closed')}
-          onStartBreak={(minutes) => startBreak(ownerShop.placeId, minutes)}
-          onEndBreak={() => endBreakNow(ownerShop.placeId)}
-        />
-      )}
-      <BottomNav />
+      <BottomNav ownerMode={session?.role === 'owner'} />
     </div>
   )
 }

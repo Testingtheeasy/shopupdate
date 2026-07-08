@@ -10,8 +10,8 @@ export default function Login() {
   function handleSubmit(e) {
     e.preventDefault()
     if (!identifier.trim()) return
-    loginWithIdentifier(identifier)
-    navigate('/')
+    const isOwner = loginWithIdentifier(identifier)
+    navigate(isOwner ? '/profile' : '/')
   }
 
   return (
