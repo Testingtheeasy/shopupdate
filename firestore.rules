@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Shops: anyone signed in can read (customers browsing the map).
+    // Only the owner whose `ownerId` matches their own owner-doc ID can write.
+    match /shops/{shopId} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && exists(/databases/$(database)/documents/owners/$(resource.data.ownerId))
+        && get(/databases/$(database)/documents/owners/$(resource.data.ownerId)).data.email == request.auth.token.email;
+    }
+
+    // Owners: readable so the app can look up "is this email an owner,"
+    // but never writable from the client — only you add these manually
+    // (or via a future admin/verification flow), so a random user can't
+    // register themselves as an owner of someone else's shop.
+    match /owners/{ownerId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
