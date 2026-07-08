@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import { pinIconUrl } from '../lib/pinIcon.js'
+import { getDisplayStatus } from '../lib/statusEngine.js'
 
 // Waits for the Google Maps JS script (loaded in index.html) to be ready.
 function useGoogleReady() {
@@ -41,13 +42,14 @@ export default function GoogleMap({ shops, center, onPinClick }) {
     // Clear old markers
     markersRef.current.forEach((m) => m.setMap(null))
     markersRef.current = shops.map((shop) => {
+      const displayStatus = getDisplayStatus(shop)
       const marker = new window.google.maps.Marker({
         position: { lat: shop.lat, lng: shop.lng },
         map: mapRef.current,
         icon: {
-          url: pinIconUrl(shop.status),
-          scaledSize: new window.google.maps.Size(40, 50),
-          anchor: new window.google.maps.Point(20, 50),
+          url: pinIconUrl(displayStatus),
+          scaledSize: new window.google.maps.Size(44, 50),
+          anchor: new window.google.maps.Point(22, 50),
         },
         title: shop.name,
       })
