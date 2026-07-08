@@ -1,13 +1,13 @@
 import React from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 
-export default function BottomNav() {
+export default function BottomNav({ ownerMode }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
   const tabs = [
     { path: '/', label: 'Map', icon: MapIcon },
-    { path: '/profile', label: 'Profile', icon: ProfileIcon },
+    { path: '/profile', label: ownerMode ? 'Shop Update' : 'Profile', icon: ProfileIcon },
   ]
 
   return (
@@ -16,15 +16,9 @@ export default function BottomNav() {
         const active = pathname === tab.path
         const Icon = tab.icon
         return (
-          <button
-            key={tab.path}
-            onClick={() => navigate(tab.path)}
-            className="flex-1 flex flex-col items-center gap-1 py-3"
-          >
+          <button key={tab.path} onClick={() => navigate(tab.path)} className="flex-1 flex flex-col items-center gap-1 py-3">
             <Icon active={active} />
-            <span className={`text-xs ${active ? 'text-accent font-medium' : 'text-ink/40'}`}>
-              {tab.label}
-            </span>
+            <span className={`text-xs ${active ? 'text-accent font-medium' : 'text-ink/40'}`}>{tab.label}</span>
           </button>
         )
       })}
