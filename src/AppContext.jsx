@@ -7,7 +7,6 @@ export function AppProvider({ children }) {
   const [session, setSession] = useState(null) // { role: 'user'|'owner', ownerId?, identifier }
   const [shops, setShops] = useState(mockShops)
 
-  // Simulates: backend checks the entered email/phone against the owners table.
   function loginWithIdentifier(identifier) {
     const clean = identifier.trim().toLowerCase()
     const owner = mockOwners.find(
@@ -24,23 +23,38 @@ export function AppProvider({ children }) {
     setSession(null)
   }
 
-  function updateShopStatus(placeId, status, note) {
-    setShops((prev) =>
-      prev.map((s) =>
-        s.placeId === placeId
-          ? { ...s, status, note: note ?? s.note, updatedAt: Date.now() }
-          : s
-      )
-    )
+  function patchShop(placeId, patch) {
+    setShops((prev) => prev.map((s) => (s.placeId === placeId ? { ...s, ...patch } : s)))
   }
 
-  // Owner "vouches" for a specific opening time today — separate from live status,
-  // so a shop that's currently closed can still tell customers a trusted time to arrive.
-  function confirmOpeningTime(placeId, time) {
+  // Owner taps "I'm open" / confirm — whether that's on-time or ahead of schedule
+  // (90 min early etc), it's the same action: stamp confirmedAt = now.
+  function confirmOpen(placeId) {
+    patchShop(placeId, { confirmedAt: Date.now(), todayOverride: null })
+  }
+
+  // "Not opening today" / "Not opening tomorrow" — cancels the whole reminder
+  // cascade for that date. Same control, different target date.
+  function setOverride(placeId, which, value) {
+    // which: 'today' | 'tomorrow'; value: 'closed' | 'open' | null
+    patchShop(placeId, which === 'today' ? { todayOverride: value } : { tomorrowOverride: value })
+  }
+
+  // Break control covers both the scheduled break (auto-triggered) and the
+  // ad-hoc "need 10 min" case — both just set breakUntil, engine handles the rest.
+  function startBreak(placeId, minutes) {
+    patchShop(placeId, { breakUntil: Date.now() + minutes * 60 * 1000 })
+  }
+
+  function endBreakNow(placeId) {
+    patchShop(placeId, { breakUntil: null })
+  }
+
+  function updateSchedule(placeId, scheduleUpdates) {
     setShops((prev) =>
       prev.map((s) =>
         s.placeId === placeId
-          ? { ...s, confirmedOpeningTime: time, confirmedAt: Date.now() }
+          ? { ...s, schedule: { ...s.schedule, ...scheduleUpdates } }
           : s
       )
     )
@@ -54,7 +68,18 @@ export function AppProvider({ children }) {
 
   return (
     <AppCtx.Provider
-      value={{ session, loginWithIdentifier, logout, shops, updateShopStatus, confirmOpeningTime, getOwnerShop }}
+      value={{
+        session,
+        loginWithIdentifier,
+        logout,
+        shops,
+        confirmOpen,
+        setOverride,
+        startBreak,
+        endBreakNow,
+        updateSchedule,
+        getOwnerShop,
+      }}
     >
       {children}
     </AppCtx.Provider>
