@@ -14,8 +14,10 @@ export function AppProvider({ children }) {
     )
     if (owner) {
       setSession({ role: 'owner', ownerId: owner.id, identifier })
+      return true
     } else {
       setSession({ role: 'user', identifier })
+      return false
     }
   }
 
@@ -30,7 +32,14 @@ export function AppProvider({ children }) {
   // Owner taps "I'm open" / confirm — whether that's on-time or ahead of schedule
   // (90 min early etc), it's the same action: stamp confirmedAt = now.
   function confirmOpen(placeId) {
-    patchShop(placeId, { confirmedAt: Date.now(), todayOverride: null })
+    patchShop(placeId, { confirmedAt: Date.now(), todayOverride: null, customOpenLabel: null })
+  }
+
+  // Owner is opening, but later than scheduled, or at a specific custom time.
+  // Still counts as "confirmed" for the engine, but carries a label so the UI
+  // can show "Opening at 11:30 (confirmed)" instead of the default open message.
+  function confirmCustomTime(placeId, timeLabel) {
+    patchShop(placeId, { confirmedAt: Date.now(), todayOverride: null, customOpenLabel: timeLabel })
   }
 
   // "Not opening today" / "Not opening tomorrow" — cancels the whole reminder
@@ -74,6 +83,7 @@ export function AppProvider({ children }) {
         logout,
         shops,
         confirmOpen,
+        confirmCustomTime,
         setOverride,
         startBreak,
         endBreakNow,
