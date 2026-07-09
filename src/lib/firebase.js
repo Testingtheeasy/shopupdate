@@ -19,3 +19,13 @@ export const app = initializeApp(firebaseConfig)
 export const db = getFirestore(app)
 export const auth = getAuth(app)
 export const googleProvider = new GoogleAuthProvider()
+
+// Firebase has no native "phone + password" mode — only phone+OTP or
+// email+password. We simulate phone+password by turning the phone number
+// into a pseudo-email under a fixed fake domain, then using normal
+// email/password auth underneath. See PHONE_AUTH_DOMAIN usage in AppContext.
+export const PHONE_AUTH_DOMAIN = 'shopstatus-users.app'
+export function phoneToPseudoEmail(phone) {
+  const digits = phone.replace(/\D/g, '')
+  return `${digits}@${PHONE_AUTH_DOMAIN}`
+}
