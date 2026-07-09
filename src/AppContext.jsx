@@ -1,19 +1,20 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import {
-  collection, onSnapshot, doc, updateDoc, query, where, getDocs,
+  collection, onSnapshot, doc, updateDoc, setDoc, query, where, getDocs,
 } from 'firebase/firestore'
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth'
-import { db, auth, googleProvider } from './lib/firebase.js'
+import {
+  signInWithPopup, signOut, onAuthStateChanged,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword,
+} from 'firebase/auth'
+import { db, auth, googleProvider, phoneToPseudoEmail, PHONE_AUTH_DOMAIN } from './lib/firebase.js'
 
 const AppCtx = createContext(null)
 
 export function AppProvider({ children }) {
-  const [session, setSession] = useState(null)     // { role, ownerId?, identifier, uid }
+  const [session, setSession] = useState(null)     // { role, ownerId?, identifier, uid? } or { role: 'guest' }
   const [shops, setShops] = useState([])
   const [authLoading, setAuthLoading] = useState(true)
 
-  // Live shop list — any change anywhere (owner action, another customer's
-  // browser) reflects here automatically, no manual refresh needed.
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'shops'), (snap) => {
       setShops(snap.docs.map((d) => ({ placeId: d.id, ...d.data() })))
@@ -21,22 +22,28 @@ export function AppProvider({ children }) {
     return unsub
   }, [])
 
-  // Resolve role on auth state change: check the `owners` collection for a
-  // document whose email matches the signed-in Google account.
+  // Resolve role whenever Firebase auth state changes. Handles both:
+  // - Google sign-in (real email) -> look up owners by `email`
+  // - Phone+password sign-in (pseudo-email) -> extract phone -> look up owners by `phone`
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        setSession(null)
         setAuthLoading(false)
-        return
+        return // don't clear a guest session here — guests aren't Firebase users
       }
-      const ownersQuery = query(collection(db, 'owners'), where('email', '==', user.email))
+      const isPseudoPhone = user.email?.endsWith(`@${PHONE_AUTH_DOMAIN}`)
+      const lookupField = isPseudoPhone ? 'phone' : 'email'
+      const lookupValue = isPseudoPhone ? user.email.split('@')[0] : user.email
+
+      const ownersQuery = query(collection(db, 'owners'), where(lookupField, '==', lookupValue))
       const ownerSnap = await getDocs(ownersQuery)
+      const identifier = isPseudoPhone ? lookupValue : user.email
+
       if (!ownerSnap.empty) {
         const ownerDoc = ownerSnap.docs[0]
-        setSession({ role: 'owner', ownerId: ownerDoc.id, identifier: user.email, uid: user.uid })
+        setSession({ role: 'owner', ownerId: ownerDoc.id, identifier, uid: user.uid })
       } else {
-        setSession({ role: 'user', identifier: user.email, uid: user.uid })
+        setSession({ role: 'user', identifier, uid: user.uid })
       }
       setAuthLoading(false)
     })
@@ -45,13 +52,39 @@ export function AppProvider({ children }) {
 
   async function loginWithGoogle() {
     await signInWithPopup(auth, googleProvider)
-    // session gets set by onAuthStateChanged above; caller can check
-    // auth.currentUser or just navigate to '/' and let the Gate route
-    // owners onward once session resolves (see Login.jsx).
+  }
+
+  // isSignup=true creates a new account; false signs into an existing one.
+  async function loginWithPhonePassword(phone, password, isSignup) {
+    const pseudoEmail = phoneToPseudoEmail(phone)
+    if (isSignup) {
+      await createUserWithEmailAndPassword(auth, pseudoEmail, password)
+    } else {
+      await signInWithEmailAndPassword(auth, pseudoEmail, password)
+    }
+  }
+
+  // Real email + password — distinct from the phone pseudo-email trick above.
+  async function loginWithEmailPassword(email, password, isSignup) {
+    if (isSignup) {
+      await createUserWithEmailAndPassword(auth, email, password)
+    } else {
+      await signInWithEmailAndPassword(auth, email, password)
+    }
+  }
+
+  // Guest = browse-only, no Firebase auth session at all. Firestore rules
+  // allow public reads, so guests can see the map/pins, but every write
+  // action in the app is only ever wired to owner screens, which guests
+  // can't reach (Gate below still requires a real session to view them —
+  // guest role is only ever routed to the map).
+  function continueAsGuest() {
+    setSession({ role: 'guest', identifier: 'Guest' })
   }
 
   function logout() {
-    signOut(auth)
+    setSession(null)
+    if (auth.currentUser) signOut(auth)
   }
 
   async function patchShop(placeId, patch) {
@@ -84,9 +117,43 @@ export function AppProvider({ children }) {
     await patchShop(placeId, { schedule: nextSchedule })
   }
 
+  // Owner "claims" a real shop found via Places Autocomplete. Creates the
+  // Firestore doc at shops/{place_id} — this IS the link between Google's
+  // data and ours, no separate mapping table needed — then points the
+  // owner's own record at it.
+  async function claimShop(ownerId, place) {
+    const placeId = place.place_id
+    const lat = typeof place.lat === 'number' ? place.lat : place.geometry?.location?.lat?.()
+    const lng = typeof place.lng === 'number' ? place.lng : place.geometry?.location?.lng?.()
+
+    await setDoc(doc(db, 'shops', placeId), {
+      name: place.name || '',
+      address: place.formatted_address || place.address || '',
+      lat: lat ?? null,
+      lng: lng ?? null,
+      phone: '',
+      ownerId,
+      schedule: {
+        openTime: '09:00',
+        closeTime: '19:00',
+        hasBreak: false,
+        breaks: [],
+        closedDays: [],
+        confirmGraceMinutes: 15,
+        reminderOffsetsMinutes: [90, 30],
+      },
+      todayOverride: null,
+      tomorrowOverride: null,
+      confirmedAt: null,
+      breakUntil: null,
+      customOpenLabel: null,
+    })
+
+    await updateDoc(doc(db, 'owners', ownerId), { shopPlaceId: placeId })
+  }
+
   function getOwnerShop(ownerId) {
-    const shop = shops.find((s) => s.ownerId === ownerId)
-    return shop || null
+    return shops.find((s) => s.ownerId === ownerId) || null
   }
 
   return (
@@ -95,6 +162,9 @@ export function AppProvider({ children }) {
         session,
         authLoading,
         loginWithGoogle,
+        loginWithPhonePassword,
+        loginWithEmailPassword,
+        continueAsGuest,
         logout,
         shops,
         confirmOpen,
@@ -103,6 +173,7 @@ export function AppProvider({ children }) {
         startBreak,
         endBreakNow,
         updateSchedule,
+        claimShop,
         getOwnerShop,
       }}
     >
