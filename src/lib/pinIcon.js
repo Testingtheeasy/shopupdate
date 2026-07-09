@@ -9,7 +9,7 @@ const BADGE_PATHS = {
 // Builds a teardrop map pin, colored + faded per the display state, with an
 // optional small circular badge icon in the top-right corner.
 export function pinIconUrl(displayStatus) {
-  const meta = DISPLAY_META[displayStatus]
+  const meta = DISPLAY_META[displayStatus] || DISPLAY_META.unverified
   const { color, opacity, badge } = meta
 
   const badgeSvg = badge

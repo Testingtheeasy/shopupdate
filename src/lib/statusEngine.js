@@ -25,7 +25,9 @@ export const DISPLAY_META = {
 }
 
 function toMinutes(hhmm) {
+  if (typeof hhmm !== 'string' || !hhmm.includes(':')) return null
   const [h, m] = hhmm.split(':').map(Number)
+  if (Number.isNaN(h) || Number.isNaN(m)) return null
   return h * 60 + m
 }
 
@@ -48,6 +50,10 @@ export function getDisplayStatus(shop, now = new Date()) {
   const openMin = toMinutes(schedule.openTime)
   const closeMin = toMinutes(schedule.closeTime)
   const graceMin = schedule.confirmGraceMinutes ?? 15
+
+  // Malformed/incomplete schedule (e.g. missing openTime/closeTime from a
+  // manual data-entry mistake) — show unverified instead of crashing.
+  if (openMin === null || closeMin === null) return DISPLAY.UNVERIFIED
 
   // Explicit owner overrides win over everything else.
   if (shop.todayOverride === 'closed') return DISPLAY.CLOSED
@@ -82,7 +88,8 @@ function isSameDay(timestamp, now) {
 // Builds the concrete list of reminder clock-times for a schedule, e.g.
 // openTime 09:00 + offsets [90, 30] -> ["07:30", "08:30"]
 export function reminderClockTimes(schedule) {
-  const openMin = toMinutes(schedule.openTime)
+  const openMin = toMinutes(schedule?.openTime)
+  if (openMin === null) return []
   return (schedule.reminderOffsetsMinutes || [])
     .slice()
     .sort((a, b) => b - a)
