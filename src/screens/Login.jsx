@@ -1,18 +1,51 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../AppContext.jsx'
 
 export default function Login() {
-  const { session, authLoading, loginWithGoogle } = useApp()
+  const { session, authLoading, loginWithGoogle, loginWithEmailPassword, loginWithPhonePassword, continueAsGuest } = useApp()
   const navigate = useNavigate()
 
-  // Once Firebase resolves who's signed in (and their role), route them.
+  const [mode, setMode] = useState('google') // 'google' | 'email' | 'phone'
+  const [isSignup, setIsSignup] = useState(false)
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
   useEffect(() => {
     if (session) navigate(session.role === 'owner' ? '/profile' : '/', { replace: true })
   }, [session, navigate])
 
+  async function handleEmailSubmit(e) {
+    e.preventDefault()
+    setError('')
+    setSubmitting(true)
+    try {
+      await loginWithEmailPassword(email.trim(), password, isSignup)
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handlePhoneSubmit(e) {
+    e.preventDefault()
+    setError('')
+    setSubmitting(true)
+    try {
+      await loginWithPhonePassword(phone.trim(), password, isSignup)
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
-    <div className="h-full flex flex-col justify-between px-6 pt-14 pb-10">
+    <div className="h-full flex flex-col justify-between px-6 pt-12 pb-8 overflow-y-auto">
       <div>
         <div className="flex items-center gap-2 mb-1">
           <span className="w-3 h-3 rounded-full bg-open inline-block" />
@@ -27,22 +60,95 @@ export default function Login() {
         </p>
       </div>
 
-      <div className="w-full">
+      <div className="w-full mt-8">
         <button
           onClick={loginWithGoogle}
           disabled={authLoading}
           className="w-full flex items-center justify-center gap-3 bg-white border border-ink/15 rounded-xl2 py-3.5 font-medium text-base text-ink shadow-sm active:bg-ink/5 transition-colors disabled:opacity-50"
         >
           <GoogleLogo />
-          {authLoading ? 'Checking sign-in…' : 'Continue with Google'}
+          Continue with Google
         </button>
-        <p className="text-xs text-ink/40 mt-3 text-center">
-          Shop owners are recognized automatically by their Google account email —
-          no separate sign-up.
+
+        <div className="flex items-center gap-3 my-4">
+          <div className="h-px bg-ink/10 flex-1" />
+          <span className="text-xs text-ink/40">or</span>
+          <div className="h-px bg-ink/10 flex-1" />
+        </div>
+
+        <div className="flex rounded-xl overflow-hidden border border-ink/10 mb-4">
+          <button onClick={() => { setMode('email'); setError('') }}
+                  className={`flex-1 py-2 text-sm font-medium ${mode === 'email' ? 'bg-accent text-white' : 'bg-white text-ink/60'}`}>
+            Email
+          </button>
+          <button onClick={() => { setMode('phone'); setError('') }}
+                  className={`flex-1 py-2 text-sm font-medium ${mode === 'phone' ? 'bg-accent text-white' : 'bg-white text-ink/60'}`}>
+            Phone
+          </button>
+        </div>
+
+        {mode === 'email' && (
+          <form onSubmit={handleEmailSubmit} className="space-y-3">
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
+                   placeholder="you@example.com"
+                   className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
+                   placeholder="Password (min 6 characters)"
+                   className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+            {error && <p className="text-xs text-closed">{error}</p>}
+            <button type="submit" disabled={submitting}
+                    className="w-full bg-accent text-white rounded-xl2 py-3.5 font-medium text-base disabled:opacity-50">
+              {submitting ? 'Please wait…' : isSignup ? 'Create account' : 'Sign in'}
+            </button>
+          </form>
+        )}
+
+        {mode === 'phone' && (
+          <form onSubmit={handlePhoneSubmit} className="space-y-3">
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required
+                   placeholder="98765 43210"
+                   className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
+                   placeholder="Password (min 6 characters)"
+                   className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+            {error && <p className="text-xs text-closed">{error}</p>}
+            <button type="submit" disabled={submitting}
+                    className="w-full bg-accent text-white rounded-xl2 py-3.5 font-medium text-base disabled:opacity-50">
+              {submitting ? 'Please wait…' : isSignup ? 'Create account' : 'Sign in'}
+            </button>
+          </form>
+        )}
+
+        {(mode === 'email' || mode === 'phone') && (
+          <button onClick={() => { setIsSignup((v) => !v); setError('') }} className="w-full text-center text-xs text-ink/50 mt-3">
+            {isSignup ? 'Already have an account? Sign in' : "Don't have an account? Create one"}
+          </button>
+        )}
+
+        <div className="flex items-center gap-3 my-4">
+          <div className="h-px bg-ink/10 flex-1" />
+          <span className="text-xs text-ink/40">or</span>
+          <div className="h-px bg-ink/10 flex-1" />
+        </div>
+
+        <button onClick={continueAsGuest} className="w-full text-center text-sm font-medium text-ink/60 py-2">
+          Continue as guest
+        </button>
+        <p className="text-[11px] text-ink/35 mt-1 text-center">
+          Browse-only — shop owners must sign in with one of the options above.
         </p>
       </div>
     </div>
   )
+}
+
+function friendlyError(err) {
+  const code = err?.code || ''
+  if (code.includes('email-already-in-use')) return 'An account already exists — try signing in instead.'
+  if (code.includes('user-not-found') || code.includes('invalid-credential')) return 'No account found with those details.'
+  if (code.includes('wrong-password')) return 'Incorrect password.'
+  if (code.includes('weak-password')) return 'Password should be at least 6 characters.'
+  return 'Something went wrong. Please try again.'
 }
 
 function GoogleLogo() {
