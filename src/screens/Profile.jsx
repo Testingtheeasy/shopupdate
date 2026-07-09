@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useApp } from '../AppContext.jsx'
 import { getDisplayStatus, DISPLAY_META, DISPLAY, reminderClockTimes } from '../lib/statusEngine.js'
 import BottomNav from '../components/BottomNav.jsx'
+import ClaimShopSearch from '../components/ClaimShopSearch.jsx'
 
 const REMINDER_OFFSET_OPTIONS = [30, 60, 90, 120, 150, 180]
 
@@ -29,8 +30,8 @@ export default function Profile() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 space-y-5 pb-6">
-        {isOwner && ownerShop ? (
-          <OwnerPanel shop={ownerShop} />
+        {isOwner ? (
+          ownerShop ? <OwnerPanel shop={ownerShop} /> : <ClaimShopSearch ownerId={session.ownerId} />
         ) : (
           <div className="bg-white rounded-xl2 border border-ink/10 p-4">
             <p className="text-xs uppercase tracking-wide text-ink/40 font-medium mb-1">Signed in as</p>
