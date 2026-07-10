@@ -3,7 +3,7 @@ import {
   collection, onSnapshot, doc, updateDoc, setDoc, query, where, getDocs,
 } from 'firebase/firestore'
 import {
-  signInWithPopup, signOut, onAuthStateChanged,
+  signInWithRedirect, signOut, onAuthStateChanged,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
 } from 'firebase/auth'
 import { db, auth, googleProvider, phoneToPseudoEmail, PHONE_AUTH_DOMAIN } from './lib/firebase.js'
@@ -51,7 +51,11 @@ export function AppProvider({ children }) {
   }, [])
 
   async function loginWithGoogle() {
-    await signInWithPopup(auth, googleProvider)
+    // Redirect (not popup) — popups are unreliable on mobile browsers and
+    // get silently blocked inside sandboxed preview environments like
+    // StackBlitz/Vercel preview iframes. Redirect navigates away and back,
+    // and onAuthStateChanged above picks up the result automatically.
+    await signInWithRedirect(auth, googleProvider)
   }
 
   // isSignup=true creates a new account; false signs into an existing one.
