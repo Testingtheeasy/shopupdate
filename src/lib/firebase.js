@@ -2,17 +2,16 @@ import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
 import { getAuth, GoogleAuthProvider } from 'firebase/auth'
 
-// From Firebase Console → Project settings → Your apps → Web app config.
-// This is safe to keep in client code — it's a public identifier, not a
-// secret. Actual protection comes from Firestore Security Rules, not from
-// hiding this object.
+// Read from environment variables (set in .env locally, and in your
+// Vercel project's Environment Variables settings for deployment) instead
+// of hardcoding values directly in this committed file.
 const firebaseConfig = {
-  apiKey: "AIzaSyBsqKsmX8xYtY-2S3RyDJ71bpdmF1ycy71",
-  authDomain: "shopstatus-live-94470.firebaseapp.com",
-  projectId: "shopstatus-live-94470",
-  storageBucket: "shopstatus-live-94470.firebasestorage.app",
-  messagingSenderId: "325465888886",
-  appId: "1:325465888886:web:9c091557549eb55946a757",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
 export const app = initializeApp(firebaseConfig)
