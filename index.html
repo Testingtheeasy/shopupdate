@@ -12,6 +12,11 @@
       Get one at https://console.cloud.google.com/google/maps-apis
     -->
     <script src="https://maps.googleapis.com/maps/api/js?key=%VITE_GOOGLE_MAPS_API_KEY%&libraries=places" defer></script>
+    <!-- TEMPORARY DEBUG TOOL: shows a mobile-friendly console/error overlay
+         on your phone screen (tap the small floating icon, bottom-right).
+         Remove this <script> tag once debugging is done / before real launch. -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
   </head>
   <body class="bg-paper">
     <div id="root"></div>
