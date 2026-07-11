@@ -20,7 +20,8 @@ export default function ClaimShopSearch({ ownerId }) {
       try {
         await claimShop(ownerId, place)
       } catch (err) {
-        setError('Could not link this shop — please try again.')
+        console.error('claimShop failed:', err)
+        setError(`Could not link this shop — ${err.code || err.message || 'unknown error'}`)
         setClaiming(false)
       }
     })
