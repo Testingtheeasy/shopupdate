@@ -29,7 +29,7 @@ export default function Profile() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 space-y-5 pb-6">
+      <div className="flex-1 overflow-y-auto px-5 space-y-5 pb-24">
         {isOwner ? (
           ownerShop ? <OwnerPanel shop={ownerShop} /> : <ClaimShopSearch ownerId={session.ownerId} />
         ) : (
