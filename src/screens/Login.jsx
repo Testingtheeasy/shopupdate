@@ -14,9 +14,22 @@ export default function Login() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  const [googleError, setGoogleError] = useState('')
+
   useEffect(() => {
     if (session) navigate(session.role === 'owner' ? '/profile' : '/', { replace: true })
   }, [session, navigate])
+
+  async function handleGoogleClick() {
+    setGoogleError('')
+    try {
+      await loginWithGoogle()
+    } catch (err) {
+      // Show the raw Firebase error code — this is the exact info needed
+      // to diagnose Cloud Console / Firebase Console config mismatches.
+      setGoogleError(`${err.code || 'unknown-error'}: ${err.message || err}`)
+    }
+  }
 
   async function handleEmailSubmit(e) {
     e.preventDefault()
@@ -62,13 +75,14 @@ export default function Login() {
 
       <div className="w-full mt-8">
         <button
-          onClick={loginWithGoogle}
+          onClick={handleGoogleClick}
           disabled={authLoading}
           className="w-full flex items-center justify-center gap-3 bg-white border border-ink/15 rounded-xl2 py-3.5 font-medium text-base text-ink shadow-sm active:bg-ink/5 transition-colors disabled:opacity-50"
         >
           <GoogleLogo />
           Continue with Google
         </button>
+        {googleError && <p className="text-xs text-closed mt-2 break-words">{googleError}</p>}
 
         <div className="flex items-center gap-3 my-4">
           <div className="h-px bg-ink/10 flex-1" />
