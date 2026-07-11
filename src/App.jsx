@@ -30,7 +30,7 @@ function Shell() {
 export default function App() {
   return (
     <AppProvider>
-      <div className="max-w-md mx-auto h-screen bg-paper text-ink font-body relative overflow-hidden">
+      <div className="app-shell max-w-md mx-auto bg-paper text-ink font-body relative overflow-hidden">
         <Shell />
       </div>
     </AppProvider>

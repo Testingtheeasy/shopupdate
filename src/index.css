@@ -6,6 +6,15 @@ html, body, #root {
   height: 100%;
 }
 
+/* Mobile browsers (esp. Chrome) resize their address bar dynamically —
+   100vh doesn't account for that and causes content to be cut off /
+   require scrolling to see the bottom. 100dvh does. Fallback to 100vh
+   for older browsers that don't support dvh yet. */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+}
+
 body {
   font-family: 'Inter', sans-serif;
   -webkit-tap-highlight-color: transparent;
