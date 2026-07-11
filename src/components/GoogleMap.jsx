@@ -41,21 +41,23 @@ export default function GoogleMap({ shops, center, onPinClick }) {
     if (!ready || !mapRef.current) return
     // Clear old markers
     markersRef.current.forEach((m) => m.setMap(null))
-    markersRef.current = shops.map((shop) => {
-      const displayStatus = getDisplayStatus(shop)
-      const marker = new window.google.maps.Marker({
-        position: { lat: shop.lat, lng: shop.lng },
-        map: mapRef.current,
-        icon: {
-          url: pinIconUrl(displayStatus),
-          scaledSize: new window.google.maps.Size(44, 50),
-          anchor: new window.google.maps.Point(22, 50),
-        },
-        title: shop.name,
+    markersRef.current = shops
+      .filter((shop) => typeof shop.lat === 'number' && typeof shop.lng === 'number' && !Number.isNaN(shop.lat) && !Number.isNaN(shop.lng))
+      .map((shop) => {
+        const displayStatus = getDisplayStatus(shop)
+        const marker = new window.google.maps.Marker({
+          position: { lat: shop.lat, lng: shop.lng },
+          map: mapRef.current,
+          icon: {
+            url: pinIconUrl(displayStatus),
+            scaledSize: new window.google.maps.Size(44, 50),
+            anchor: new window.google.maps.Point(22, 50),
+          },
+          title: shop.name,
+        })
+        marker.addListener('click', () => onPinClick(shop.placeId))
+        return marker
       })
-      marker.addListener('click', () => onPinClick(shop.placeId))
-      return marker
-    })
   }, [ready, shops, onPinClick])
 
   if (!ready) {
