@@ -26,8 +26,9 @@ service cloud.firestore {
 
     function isMatchingOwner(ownerId) {
       let o = get(/databases/$(database)/documents/owners/$(ownerId)).data;
-      return o.email == request.auth.token.email
-          || (o.phone + '@shopstatus-users.app') == request.auth.token.email;
+      let tokenEmail = request.auth.token.email.lower();
+      return (('email' in o) && o.email.lower() == tokenEmail)
+          || (('phone' in o) && (o.phone + '@shopstatus-users.app') == tokenEmail);
     }
   }
 }
