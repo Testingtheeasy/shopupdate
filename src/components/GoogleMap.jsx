@@ -35,7 +35,15 @@ export default function GoogleMap({ shops, center, onPinClick }) {
         styles: MAP_STYLE,
       })
     }
-  }, [ready, center])
+  }, [ready])
+
+  // Pan to a new center whenever it changes (e.g. after a search selection) —
+  // the effect above only sets it once at map creation.
+  useEffect(() => {
+    if (!mapRef.current || !center) return
+    mapRef.current.panTo(center)
+    mapRef.current.setZoom(16)
+  }, [center])
 
   useEffect(() => {
     if (!ready || !mapRef.current) return
