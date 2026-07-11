@@ -16,9 +16,11 @@ export function AppProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(true)
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'shops'), (snap) => {
-      setShops(snap.docs.map((d) => ({ placeId: d.id, ...d.data() })))
-    })
+    const unsub = onSnapshot(
+      collection(db, 'shops'),
+      (snap) => setShops(snap.docs.map((d) => ({ placeId: d.id, ...d.data() }))),
+      (err) => console.error('shops listener error:', err)
+    )
     return unsub
   }, [])
 
@@ -151,9 +153,10 @@ export function AppProvider({ children }) {
       confirmedAt: null,
       breakUntil: null,
       customOpenLabel: null,
-    })
+    }).catch((err) => { console.error('claimShop: shop create failed:', err); throw err })
 
     await updateDoc(doc(db, 'owners', ownerId), { shopPlaceId: placeId })
+      .catch((err) => { console.error('claimShop: owner link update failed:', err); throw err })
   }
 
   function getOwnerShop(ownerId) {
