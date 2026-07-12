@@ -9,6 +9,8 @@ const BADGE_PATHS = {
 // Builds a teardrop map pin, colored + faded per the display state, with an
 // optional small circular badge icon in the top-right corner.
 export function pinIconUrl(displayStatus) {
+  if (displayStatus === 'search_result') return searchResultPinUrl()
+
   const meta = DISPLAY_META[displayStatus] || DISPLAY_META.unverified
   const { color, opacity, badge } = meta
 
@@ -25,6 +27,23 @@ export function pinIconUrl(displayStatus) {
         <circle cx="23" cy="23" r="9" fill="white"/>
       </g>
       ${badgeSvg}
+    </svg>
+  `.trim()
+  return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg)
+}
+
+// A distinct, slightly larger pin for "you just searched this" — separate
+// from any status color so it's never confused with open/closed/etc.
+// Tapping it is what actually opens the shop, search itself just drops this.
+function searchResultPinUrl() {
+  const color = '#2C6E63'
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="58" height="66" viewBox="0 0 58 66">
+      <path d="M26 0C11.6 0 0 11.6 0 26c0 18.6 26 40 26 40s26-21.4 26-40C52 11.6 40.4 0 26 0z"
+            fill="${color}" stroke="white" stroke-width="3"/>
+      <circle cx="26" cy="26" r="11" fill="white"/>
+      <circle cx="24" cy="24" r="6" stroke="${color}" stroke-width="2.2" fill="none"/>
+      <line x1="28.5" y1="28.5" x2="32" y2="32" stroke="${color}" stroke-width="2.2" stroke-linecap="round"/>
     </svg>
   `.trim()
   return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg)
