@@ -18,11 +18,13 @@ function useGoogleReady() {
   return ready
 }
 
-export default function GoogleMap({ shops, center, onPinClick }) {
+export default function GoogleMap({ shops, center, myLocation, searchMarker, onPinClick }) {
   const ready = useGoogleReady()
   const mapDivRef = useRef(null)
   const mapRef = useRef(null)
   const markersRef = useRef([])
+  const locationMarkerRef = useRef(null)
+  const searchMarkerRef = useRef(null)
 
   useEffect(() => {
     if (!ready || !mapDivRef.current) return
@@ -32,6 +34,7 @@ export default function GoogleMap({ shops, center, onPinClick }) {
         zoom: 15,
         disableDefaultUI: true,
         zoomControl: true,
+        zoomControlOptions: { position: window.google.maps.ControlPosition.RIGHT_CENTER },
         styles: MAP_STYLE,
       })
     }
@@ -67,6 +70,48 @@ export default function GoogleMap({ shops, center, onPinClick }) {
         return marker
       })
   }, [ready, shops, onPinClick])
+
+  // "My location" blue dot — separate from shop pins, just a position indicator.
+  useEffect(() => {
+    if (!ready || !mapRef.current) return
+    if (locationMarkerRef.current) locationMarkerRef.current.setMap(null)
+    if (!myLocation) return
+    locationMarkerRef.current = new window.google.maps.Marker({
+      position: myLocation,
+      map: mapRef.current,
+      icon: {
+        path: window.google.maps.SymbolPath.CIRCLE,
+        scale: 8,
+        fillColor: '#2C6E63',
+        fillOpacity: 1,
+        strokeColor: '#FFFFFF',
+        strokeWeight: 3,
+      },
+      title: 'Your location',
+      zIndex: 999,
+    })
+  }, [ready, myLocation])
+
+  // Searched-but-not-yet-selected place — a distinct highlighted pin the
+  // user taps to open, instead of auto-navigating straight to details.
+  useEffect(() => {
+    if (!ready || !mapRef.current) return
+    if (searchMarkerRef.current) searchMarkerRef.current.setMap(null)
+    if (!searchMarker) return
+    searchMarkerRef.current = new window.google.maps.Marker({
+      position: { lat: searchMarker.lat, lng: searchMarker.lng },
+      map: mapRef.current,
+      icon: {
+        url: pinIconUrl('search_result'),
+        scaledSize: new window.google.maps.Size(50, 58),
+        anchor: new window.google.maps.Point(25, 58),
+      },
+      title: searchMarker.name,
+      animation: window.google.maps.Animation.DROP,
+      zIndex: 1000,
+    })
+    searchMarkerRef.current.addListener('click', searchMarker.onClick)
+  }, [ready, searchMarker])
 
   if (!ready) {
     return (
