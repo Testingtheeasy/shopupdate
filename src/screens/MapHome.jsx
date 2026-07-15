@@ -19,7 +19,7 @@ export default function MapHome() {
   // Start at the visitor's real location instead of always defaulting to
   // Chennai for everyone regardless of where they actually are. Also drives
   // the blue "my location" dot on the map.
-  useEffect(() => {
+  const locateMe = useCallback(() => {
     if (!navigator.geolocation) return
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -27,10 +27,12 @@ export default function MapHome() {
         setCenter(loc)
         setMyLocation(loc)
       },
-      () => {}, // silently keep the fallback on denial/error
+      () => {},
       { timeout: 5000 }
     )
   }, [])
+
+  useEffect(() => { locateMe() }, [locateMe])
 
   // Search only drops a pin and pans the map to it — it does NOT navigate
   // straight to the shop. The person taps the dropped pin (like any other
@@ -82,6 +84,15 @@ export default function MapHome() {
           </button>
         </div>
       )}
+
+      <button
+        onClick={locateMe}
+        aria-label="Go to my location"
+        className="absolute bottom-24 left-4 z-10 w-11 h-11 rounded-full bg-white shadow-lg border border-ink/10 flex items-center justify-center"
+      >
+        <span className="w-3 h-3 rounded-full bg-accent" />
+      </button>
+
       <BottomNav ownerMode={session?.role === 'owner'} />
     </div>
   )

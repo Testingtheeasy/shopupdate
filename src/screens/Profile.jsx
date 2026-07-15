@@ -19,7 +19,9 @@ export default function Profile() {
           <div className="w-9 h-9 rounded-full bg-accent text-white flex items-center justify-center text-sm font-semibold shrink-0">
             {initial}
           </div>
-          <h1 className="font-display text-2xl font-600">{isOwner ? 'Shop Update' : 'Profile'}</h1>
+          <h1 className="font-display text-2xl font-600 truncate">
+            {isOwner ? (ownerShop ? ownerShop.name : 'Shop Update') : 'Profile'}
+          </h1>
         </div>
         <button onClick={logout} aria-label="Log out" className="p-2 -mr-2">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -86,21 +88,39 @@ function TodayCard({ shop, display, confirmOpen, confirmCustomTime, setOverride,
   const settled = isConfirmedToday || isClosedToday
   const showButtons = editing || !settled
 
+  // "Opening late / custom time" only makes sense once the shop's normal
+  // opening time has actually passed — before that, "Open" is the right
+  // action, not a late/custom label.
+  const pastOpenTime = isPast(shop.schedule?.openTime)
+
   return (
     <div className="rounded-xl2 p-4 space-y-3" style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #2C6E6333', boxShadow: '0 2px 10px rgba(44,110,99,0.08)' }}>
-      <p className="text-xs uppercase tracking-wide font-semibold" style={{ color: '#2C6E63' }}>Today</p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs uppercase tracking-wide font-semibold" style={{ color: '#2C6E63' }}>Today shop status</p>
+        {settled && (
+          <button
+            onClick={() => { setEditing((v) => !v); setPickingCustom(false) }}
+            aria-label={editing ? 'Cancel edit' : 'Edit'}
+            className="text-xs font-medium text-accent flex items-center gap-1"
+          >
+            {editing ? (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="#2C6E63" strokeWidth="2.2" strokeLinecap="round" /></svg>
+                Cancel
+              </>
+            ) : 'Edit'}
+          </button>
+        )}
+      </div>
 
       {!showButtons && (
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-ink">
-              {isClosedToday ? 'Not opening today' : shop.customOpenLabel ? `Opening at ${shop.customOpenLabel}` : 'Confirmed open'}
-            </p>
-            <p className="text-xs text-ink/40 mt-0.5">
-              {isClosedToday ? 'Customers see this immediately' : 'Customers see a confirmed green pin'}
-            </p>
-          </div>
-          <button onClick={() => setEditing(true)} className="text-sm font-medium text-accent shrink-0 ml-3">Edit</button>
+        <div>
+          <p className="text-sm font-medium text-ink">
+            {isClosedToday ? 'Not opening today' : shop.customOpenLabel ? `Opening at ${shop.customOpenLabel}` : 'Confirmed open'}
+          </p>
+          <p className="text-xs text-ink/40 mt-0.5">
+            {isClosedToday ? 'Customers see this immediately' : 'Customers see a confirmed green pin'}
+          </p>
         </div>
       )}
 
@@ -120,27 +140,38 @@ function TodayCard({ shop, display, confirmOpen, confirmCustomTime, setOverride,
               Closed
             </button>
             <button
+              disabled={!pastOpenTime}
               onClick={() => setPickingCustom(true)}
-              className="rounded-xl py-2.5 text-sm font-medium border border-ink/15 text-ink/70 bg-paper col-span-2"
+              className={`rounded-xl py-2.5 text-sm font-medium border col-span-2 ${
+                pastOpenTime ? 'border-ink/15 text-ink/70 bg-paper' : 'border-ink/10 text-ink/30 bg-paper/50'
+              }`}
             >
               Opening late / custom time
             </button>
+            {!pastOpenTime && (
+              <p className="col-span-2 text-[11px] text-ink/35 -mt-1">
+                Available after your usual opening time ({shop.schedule?.openTime}) has passed.
+              </p>
+            )}
           </div>
 
           {pickingCustom && (
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="time"
-                value={customTime}
-                onChange={(e) => setCustomTime(e.target.value)}
-                className="flex-1 border border-ink/15 rounded-xl px-3 py-2.5 text-sm bg-paper outline-none focus:border-accent"
-              />
-              <button
-                onClick={() => { confirmCustomTime(shop.placeId, customTime); setEditing(false); setPickingCustom(false) }}
-                className="bg-accent text-white rounded-xl px-4 py-2.5 text-sm font-medium whitespace-nowrap"
-              >
-                Confirm
-              </button>
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center gap-2">
+                <input
+                  type="time"
+                  value={customTime}
+                  onChange={(e) => setCustomTime(e.target.value)}
+                  className="flex-1 border border-ink/15 rounded-xl px-3 py-2.5 text-sm bg-paper outline-none focus:border-accent"
+                />
+                <button
+                  onClick={() => { confirmCustomTime(shop.placeId, customTime); setEditing(false); setPickingCustom(false) }}
+                  className="bg-accent text-white rounded-xl px-4 py-2.5 text-sm font-medium whitespace-nowrap"
+                >
+                  Confirm
+                </button>
+              </div>
+              <button onClick={() => setPickingCustom(false)} className="text-xs text-ink/40">Cancel</button>
             </div>
           )}
         </>
@@ -166,11 +197,18 @@ function TodayCard({ shop, display, confirmOpen, confirmCustomTime, setOverride,
   )
 }
 
+function isPast(hhmm) {
+  if (!hhmm) return false
+  const [h, m] = hhmm.split(':').map(Number)
+  const now = new Date()
+  return now.getHours() * 60 + now.getMinutes() >= h * 60 + m
+}
+
 function TomorrowCard({ shop, setOverride }) {
   const selected = shop.tomorrowOverride === 'closed' ? 'holiday' : 'open'
   return (
     <div className="bg-white rounded-xl2 border border-ink/10 p-4 space-y-3">
-      <p className="text-xs uppercase tracking-wide text-ink/40 font-medium">Tomorrow</p>
+      <p className="text-xs uppercase tracking-wide text-ink/40 font-medium">Tomorrow shop status</p>
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => setOverride(shop.placeId, 'tomorrow', null)}
