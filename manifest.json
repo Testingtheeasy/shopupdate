@@ -1,0 +1,10 @@
+{
+  "name": "ShopStatus",
+  "short_name": "ShopStatus",
+  "description": "Know before you go — real shop status, straight from the owner.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F5EF",
+  "theme_color": "#2C6E63",
+  "icons": []
+}
