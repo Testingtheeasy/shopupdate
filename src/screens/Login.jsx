@@ -102,13 +102,19 @@ export default function Login() {
         </div>
 
         {mode === 'email' && (
-          <form onSubmit={handleEmailSubmit} className="space-y-3">
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
-                   placeholder="you@example.com"
-                   className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
-                   placeholder="Password (min 6 characters)"
-                   className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+          <form onSubmit={handleEmailSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-ink/50 mb-1.5">Email</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
+                     placeholder="you@example.com"
+                     className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink/50 mb-1.5">Password</label>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
+                     placeholder="Min 6 characters"
+                     className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+            </div>
             {error && <p className="text-xs text-closed">{error}</p>}
             <button type="submit" disabled={submitting}
                     className="w-full bg-accent text-white rounded-xl2 py-3.5 font-medium text-base disabled:opacity-50">
@@ -118,13 +124,19 @@ export default function Login() {
         )}
 
         {mode === 'phone' && (
-          <form onSubmit={handlePhoneSubmit} className="space-y-3">
-            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required
-                   placeholder="98765 43210"
-                   className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
-                   placeholder="Password (min 6 characters)"
-                   className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+          <form onSubmit={handlePhoneSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-ink/50 mb-1.5">Phone number</label>
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required
+                     placeholder="98765 43210"
+                     className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink/50 mb-1.5">Password</label>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
+                     placeholder="Min 6 characters"
+                     className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+            </div>
             {error && <p className="text-xs text-closed">{error}</p>}
             <button type="submit" disabled={submitting}
                     className="w-full bg-accent text-white rounded-xl2 py-3.5 font-medium text-base disabled:opacity-50">

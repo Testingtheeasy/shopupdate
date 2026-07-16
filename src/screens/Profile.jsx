@@ -15,11 +15,11 @@ export default function Profile() {
   return (
     <div className="relative w-full h-full flex flex-col">
       <div className="flex items-center justify-between px-5 pt-6 pb-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-9 h-9 rounded-full bg-accent text-white flex items-center justify-center text-sm font-semibold shrink-0">
             {initial}
           </div>
-          <h1 className="font-display text-2xl font-600 truncate">
+          <h1 className="font-display text-xl font-600 leading-tight break-words">
             {isOwner ? (ownerShop ? ownerShop.name : 'Shop Update') : 'Profile'}
           </h1>
         </div>
@@ -64,9 +64,12 @@ function OwnerPanel({ shop }) {
         </div>
       </div>
 
-      {/* 2. Today — the bright, primary card */}
-      <TodayCard shop={shop} display={display} confirmOpen={confirmOpen} confirmCustomTime={confirmCustomTime}
-                 setOverride={setOverride} startBreak={startBreak} endBreakNow={endBreakNow} />
+      {/* 2. Today — the bright, primary card. Hidden once past closing time,
+          since "open/closed today" no longer applies until tomorrow. */}
+      {!isPast(shop.schedule?.closeTime) && (
+        <TodayCard shop={shop} display={display} confirmOpen={confirmOpen} confirmCustomTime={confirmCustomTime}
+                   setOverride={setOverride} startBreak={startBreak} endBreakNow={endBreakNow} />
+      )}
 
       {/* 3. Tomorrow */}
       <TomorrowCard shop={shop} setOverride={setOverride} />

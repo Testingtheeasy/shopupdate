@@ -10,11 +10,18 @@ const CHENNAI_CENTER = { lat: 13.0418, lng: 80.2341 } // fallback only, if geolo
 // Map is read-only for everyone, including owners — no edit controls live
 // here. Owners manage their shop entirely from the Shop Update tab.
 export default function MapHome() {
-  const { shops, session } = useApp()
+  const { shops, session, getOwnerShop } = useApp()
   const navigate = useNavigate()
   const [center, setCenter] = useState(CHENNAI_CENTER)
   const [myLocation, setMyLocation] = useState(null)
   const [searchPlace, setSearchPlace] = useState(null)
+
+  const ownerShop = session?.role === 'owner' ? getOwnerShop(session.ownerId) : null
+
+  const goToMyShop = useCallback(() => {
+    if (!ownerShop || typeof ownerShop.lat !== 'number') return
+    setCenter({ lat: ownerShop.lat, lng: ownerShop.lng })
+  }, [ownerShop])
 
   // Start at the visitor's real location instead of always defaulting to
   // Chennai for everyone regardless of where they actually are. Also drives
@@ -92,6 +99,19 @@ export default function MapHome() {
       >
         <span className="w-3 h-3 rounded-full bg-accent" />
       </button>
+
+      {ownerShop && (
+        <button
+          onClick={goToMyShop}
+          className="absolute bottom-24 left-[4.25rem] z-10 h-11 px-4 rounded-full bg-accent text-white shadow-lg flex items-center gap-2 text-sm font-medium"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+            <path d="M3 11l9-8 9 8" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          My shop
+        </button>
+      )}
 
       <BottomNav ownerMode={session?.role === 'owner'} />
     </div>
