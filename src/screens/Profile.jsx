@@ -142,24 +142,37 @@ function TodayCard({ shop, display, confirmOpen, confirmCustomTime, setOverride,
             >
               Closed
             </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
             <button
               disabled={!pastOpenTime}
-              onClick={() => setPickingCustom(true)}
-              className={`rounded-xl py-2.5 text-sm font-medium border col-span-2 ${
+              onClick={() => setPickingCustom('late')}
+              className={`rounded-xl py-2.5 text-sm font-medium border ${
                 pastOpenTime ? 'border-ink/15 text-ink/70 bg-paper' : 'border-ink/10 text-ink/30 bg-paper/50'
               }`}
             >
-              Opening late / custom time
+              Opening late
             </button>
-            {!pastOpenTime && (
-              <p className="col-span-2 text-[11px] text-ink/35 -mt-1">
-                Available after your usual opening time ({shop.schedule?.openTime}) has passed.
-              </p>
-            )}
+            <button
+              onClick={() => setPickingCustom('custom')}
+              className="rounded-xl py-2.5 text-sm font-medium border border-ink/15 text-ink/70 bg-paper"
+            >
+              Custom time
+            </button>
           </div>
+          {!pastOpenTime && (
+            <p className="text-[11px] text-ink/35 -mt-1">
+              "Opening late" unlocks after your usual opening time ({shop.schedule?.openTime}) passes.
+              "Custom time" works anytime — use it to pre-confirm an early opening too.
+            </p>
+          )}
 
           {pickingCustom && (
             <div className="space-y-2 pt-1">
+              <p className="text-xs text-ink/50">
+                {pickingCustom === 'late' ? "What time will you actually open?" : "Set a specific opening time"}
+              </p>
               <div className="flex items-center gap-2">
                 <input
                   type="time"
@@ -209,26 +222,56 @@ function isPast(hhmm) {
 
 function TomorrowCard({ shop, setOverride }) {
   const selected = shop.tomorrowOverride === 'closed' ? 'holiday' : 'open'
+  const pastCloseTime = isPast(shop.schedule?.closeTime)
+  const [editing, setEditing] = useState(false)
+  const expanded = editing || pastCloseTime
+
   return (
     <div className="bg-white rounded-xl2 border border-ink/10 p-4 space-y-3">
-      <p className="text-xs uppercase tracking-wide text-ink/40 font-medium">Tomorrow shop status</p>
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={() => setOverride(shop.placeId, 'tomorrow', null)}
-          className={`rounded-xl py-2.5 text-sm font-medium border ${selected === 'open' ? 'bg-accent text-white border-accent' : 'bg-paper text-ink/70 border-ink/10'}`}
-        >
-          Open
-        </button>
-        <button
-          onClick={() => setOverride(shop.placeId, 'tomorrow', 'closed')}
-          className={`rounded-xl py-2.5 text-sm font-medium border ${selected === 'holiday' ? 'bg-closed text-white border-closed' : 'bg-paper text-ink/70 border-ink/10'}`}
-        >
-          Holiday / Leave
-        </button>
+      <div className="flex items-center justify-between">
+        <p className="text-xs uppercase tracking-wide text-ink/40 font-medium">Tomorrow shop status</p>
+        {!pastCloseTime && (
+          <button
+            onClick={() => setEditing((v) => !v)}
+            className="text-xs font-medium text-accent flex items-center gap-1"
+          >
+            {editing ? (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="#2C6E63" strokeWidth="2.2" strokeLinecap="round" /></svg>
+                Cancel
+              </>
+            ) : 'Edit'}
+          </button>
+        )}
       </div>
-      <p className="text-xs text-ink/40">
-        If "Open," customers start seeing a faded "Likely to open" pin from about 3 hours before your opening time — no action needed from you until tomorrow's reminders begin.
-      </p>
+
+      {!expanded && (
+        <p className="text-sm font-medium text-ink">
+          {selected === 'holiday' ? 'Not opening tomorrow' : 'Opening as usual'}
+        </p>
+      )}
+
+      {expanded && (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => { setOverride(shop.placeId, 'tomorrow', null); setEditing(false) }}
+              className={`rounded-xl py-2.5 text-sm font-medium border ${selected === 'open' ? 'bg-accent text-white border-accent' : 'bg-paper text-ink/70 border-ink/10'}`}
+            >
+              Open
+            </button>
+            <button
+              onClick={() => { setOverride(shop.placeId, 'tomorrow', 'closed'); setEditing(false) }}
+              className={`rounded-xl py-2.5 text-sm font-medium border ${selected === 'holiday' ? 'bg-closed text-white border-closed' : 'bg-paper text-ink/70 border-ink/10'}`}
+            >
+              Holiday / Leave
+            </button>
+          </div>
+          <p className="text-xs text-ink/40">
+            If "Open," customers start seeing a faded "Likely to open" pin from about 3 hours before your opening time — no action needed from you until tomorrow's reminders begin.
+          </p>
+        </>
+      )}
     </div>
   )
 }
