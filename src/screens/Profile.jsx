@@ -1,16 +1,27 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useApp } from '../AppContext.jsx'
-import { getDisplayStatus, DISPLAY_META, DISPLAY, reminderClockTimes } from '../lib/statusEngine.js'
+import { getDisplayStatus, DISPLAY_META, DISPLAY, reminderClockTimes, isDormantPeriod } from '../lib/statusEngine.js'
 import BottomNav from '../components/BottomNav.jsx'
 import ClaimShopSearch from '../components/ClaimShopSearch.jsx'
+import { registerForPush } from '../lib/pushNotifications.js'
 
 const REMINDER_OFFSET_OPTIONS = [30, 60, 90, 120, 150, 180]
 
 export default function Profile() {
-  const { session, logout, getOwnerShop } = useApp()
+  const { session, logout, getOwnerShop, saveFcmToken } = useApp()
   const ownerShop = session.role === 'owner' ? getOwnerShop(session.ownerId) : null
   const isOwner = session.role === 'owner'
   const initial = (session.identifier || '?').trim()[0]?.toUpperCase() || '?'
+
+  // Register this device for reminder push notifications once the owner
+  // has a real shop set up — no point asking before there's anything to
+  // remind them about.
+  useEffect(() => {
+    if (!ownerShop) return
+    registerForPush().then((token) => {
+      if (token) saveFcmToken(session.ownerId, token)
+    })
+  }, [ownerShop?.placeId])
 
   return (
     <div className="relative w-full h-full flex flex-col">
@@ -62,11 +73,17 @@ function OwnerPanel({ shop }) {
           <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: meta.color, opacity: meta.opacity }} />
           <p className="text-sm" style={{ color: meta.color }}>{meta.label}</p>
         </div>
+        {shop.verificationStatus === 'pending' && (
+          <p className="text-xs text-ink/50 bg-unverifiedBg rounded-lg px-3 py-2 mt-3">
+            ⏳ Your shop is pending manual review — customers see it as unverified until we approve it.
+            Everything else here still works, so feel free to set up your schedule now.
+          </p>
+        )}
       </div>
 
       {/* 2. Today — the bright, primary card. Hidden once past closing time,
           since "open/closed today" no longer applies until tomorrow. */}
-      {!isPast(shop.schedule?.closeTime) && (
+      {!isDormantPeriod(shop.schedule) && (
         <TodayCard shop={shop} display={display} confirmOpen={confirmOpen} confirmCustomTime={confirmCustomTime}
                    setOverride={setOverride} startBreak={startBreak} endBreakNow={endBreakNow} />
       )}
@@ -84,6 +101,32 @@ function TodayCard({ shop, display, confirmOpen, confirmCustomTime, setOverride,
   const [editing, setEditing] = useState(false)
   const [pickingCustom, setPickingCustom] = useState(false)
   const [customTime, setCustomTime] = useState(shop.schedule?.openTime || '09:00')
+
+  const onBreak = display === DISPLAY.ON_BREAK
+
+  if (shop.schedule?.is24Hours) {
+    return (
+      <div className="rounded-xl2 p-4 space-y-3" style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #2C6E6333', boxShadow: '0 2px 10px rgba(44,110,99,0.08)' }}>
+        <p className="text-xs uppercase tracking-wide font-semibold" style={{ color: '#2C6E63' }}>Today shop status</p>
+        {onBreak ? (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-ink/70">On a break right now</p>
+            <button onClick={() => endBreakNow(shop.placeId)} className="bg-accent text-white rounded-xl px-3.5 py-2 text-xs font-medium">
+              End break now
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-ink">Open 24 hours — no confirmation needed</p>
+            <div className="flex gap-1.5">
+              <button onClick={() => startBreak(shop.placeId, 10)} className="rounded-lg px-2.5 py-1.5 text-xs font-medium border border-ink/10 bg-paper text-ink/60">10m</button>
+              <button onClick={() => startBreak(shop.placeId, 30)} className="rounded-lg px-2.5 py-1.5 text-xs font-medium border border-ink/10 bg-paper text-ink/60">30m</button>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const isConfirmedToday = !!shop.confirmedAt && new Date(shop.confirmedAt).toDateString() === new Date().toDateString()
   const isClosedToday = shop.todayOverride === 'closed'
@@ -222,15 +265,15 @@ function isPast(hhmm) {
 
 function TomorrowCard({ shop, setOverride }) {
   const selected = shop.tomorrowOverride === 'closed' ? 'holiday' : 'open'
-  const pastCloseTime = isPast(shop.schedule?.closeTime)
+  const dormant = isDormantPeriod(shop.schedule)
   const [editing, setEditing] = useState(false)
-  const expanded = editing || pastCloseTime
+  const expanded = editing || dormant
 
   return (
     <div className="bg-white rounded-xl2 border border-ink/10 p-4 space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs uppercase tracking-wide text-ink/40 font-medium">Tomorrow shop status</p>
-        {!pastCloseTime && (
+        {!dormant && (
           <button
             onClick={() => setEditing((v) => !v)}
             className="text-xs font-medium text-accent flex items-center gap-1"
@@ -304,6 +347,7 @@ function ScheduleCard({ shop, updateSchedule }) {
         <ScheduleEditor shop={shop} updateSchedule={updateSchedule} />
       )}
 
+      {!shop.schedule.is24Hours && (
       <div className="pt-3 border-t border-ink/10 space-y-3">
         <p className="text-xs uppercase tracking-wide text-ink/40 font-medium">
           Reminders before opening ({shop.schedule.reminderOffsetsMinutes.length} selected — pick 2 to 4)
@@ -336,6 +380,7 @@ function ScheduleCard({ shop, updateSchedule }) {
           <p className="text-xs text-ink/40">You'll be pinged at: {reminders.join(', ')} (today's opening {shop.schedule.openTime})</p>
         )}
       </div>
+      )}
     </div>
   )
 }
@@ -344,6 +389,22 @@ function ScheduleEditor({ shop, updateSchedule }) {
   const s = shop.schedule
   return (
     <div className="space-y-3">
+      <div className="flex items-center justify-between bg-openBg rounded-xl px-3.5 py-3">
+        <p className="text-sm font-medium text-ink">Open 24 hours</p>
+        <button
+          onClick={() => updateSchedule(shop.placeId, { is24Hours: !s.is24Hours })}
+          className={`w-11 h-6 rounded-full relative transition-colors ${s.is24Hours ? 'bg-accent' : 'bg-ink/15'}`}
+        >
+          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${s.is24Hours ? 'translate-x-5' : 'translate-x-0.5'}`} />
+        </button>
+      </div>
+
+      {s.is24Hours ? (
+        <p className="text-xs text-ink/40">
+          One tap and you're set — no daily confirmations needed. Weekly off days and breaks below still apply if you use them.
+        </p>
+      ) : (
+        <>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Opens">
           <input type="time" value={s.openTime} onChange={(e) => updateSchedule(shop.placeId, { openTime: e.target.value })}
@@ -354,6 +415,15 @@ function ScheduleEditor({ shop, updateSchedule }) {
                  className="w-full border border-ink/15 rounded-xl px-3 py-2 text-sm bg-paper outline-none focus:border-accent" />
         </Field>
       </div>
+
+      {s.closeTime && s.openTime && s.closeTime <= s.openTime && (
+        <p className="text-xs text-accent bg-openBg rounded-lg px-3 py-2">
+          Closing time is earlier than opening time — we'll treat this as an overnight shop
+          (e.g. opens {s.openTime}, closes {s.closeTime} the next morning). No extra setup needed.
+        </p>
+      )}
+        </>
+      )}
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-ink/70">Take a break?</p>
