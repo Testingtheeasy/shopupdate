@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
 import { getAuth, GoogleAuthProvider } from 'firebase/auth'
+import { getMessaging, isSupported } from 'firebase/messaging'
 
 // Read from environment variables (set in .env locally, and in your
 // Vercel project's Environment Variables settings for deployment) instead
@@ -18,6 +19,11 @@ export const app = initializeApp(firebaseConfig)
 export const db = getFirestore(app)
 export const auth = getAuth(app)
 export const googleProvider = new GoogleAuthProvider()
+
+// FCM isn't supported everywhere (e.g. some in-app browsers, iOS Safari
+// without PWA install) — this resolves to null gracefully instead of
+// throwing, so calling code can just check for that.
+export const messagingPromise = isSupported().then((ok) => (ok ? getMessaging(app) : null))
 
 // Firebase has no native "phone + password" mode — only phone+OTP or
 // email+password. We simulate phone+password by turning the phone number
