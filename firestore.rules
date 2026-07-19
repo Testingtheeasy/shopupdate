@@ -2,26 +2,19 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Shops: public read (customers browsing). Create/update only allowed
-    // if the signed-in user's email (or phone, disguised as a pseudo-email —
-    // must match PHONE_AUTH_DOMAIN in src/lib/firebase.js) matches the
-    // owners/{ownerId} document referenced by the shop's own `ownerId` field.
     match /shops/{shopId} {
       allow read: if true;
       allow create, update: if request.auth != null && isMatchingOwner(request.resource.data.ownerId);
     }
 
-    // Owners: publicly readable (needed to resolve role on login).
-    // Never creatable/deletable from the client — you seed these manually.
-    // The one exception: the matching owner may update ONLY their own
-    // `shopPlaceId` field, which is how the "claim your shop" flow links
-    // their account to a shop document.
     match /owners/{ownerId} {
       allow read: if true;
       allow create, delete: if false;
+      // Owner can update shopPlaceId (claim flow) and their own fcmToken
+      // (notification registration) — nothing else, ever, from the client.
       allow update: if request.auth != null
         && isMatchingOwner(ownerId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['shopPlaceId']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['shopPlaceId', 'fcmToken']);
     }
 
     function isMatchingOwner(ownerId) {
