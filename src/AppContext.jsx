@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react'
 import {
-  collection, onSnapshot, doc, updateDoc, setDoc, query, where, getDocs,
+  collection, onSnapshot, doc, updateDoc, setDoc, getDoc,
 } from 'firebase/firestore'
 import {
   signInWithRedirect, signOut, onAuthStateChanged,
@@ -9,11 +9,11 @@ import {
 import { db, auth, googleProvider, phoneToPseudoEmail, PHONE_AUTH_DOMAIN } from './lib/firebase.js'
 
 const AppCtx = createContext(null)
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || ''
 
 // Minimum gap between repeat calls to the same write action — a lightweight,
-// client-side guard against accidental double-taps and basic spam-clicking.
-// This is NOT real server-side rate limiting (that needs Firebase App Check
-// or Cloud Functions) — just a cheap first layer that costs nothing to add.
+// client-side guard against accidental double-taps. NOT real server-side
+// rate limiting (that needs App Check / Cloud Functions) — just cheap insurance.
 const WRITE_COOLDOWN_MS = 1200
 
 export function AppProvider({ children }) {
@@ -42,6 +42,8 @@ export function AppProvider({ children }) {
     return unsub
   }, [])
 
+  // Owner doc ID is always the Firebase Auth UID now — no more fragile
+  // email/phone matching. A user is an "owner" simply if owners/{uid} exists.
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -49,16 +51,11 @@ export function AppProvider({ children }) {
         return
       }
       const isPseudoPhone = user.email?.endsWith(`@${PHONE_AUTH_DOMAIN}`)
-      const lookupField = isPseudoPhone ? 'phone' : 'email'
-      const lookupValue = isPseudoPhone ? user.email.split('@')[0] : user.email
+      const identifier = isPseudoPhone ? user.email.split('@')[0] : user.email
 
-      const ownersQuery = query(collection(db, 'owners'), where(lookupField, '==', lookupValue))
-      const ownerSnap = await getDocs(ownersQuery)
-      const identifier = isPseudoPhone ? lookupValue : user.email
-
-      if (!ownerSnap.empty) {
-        const ownerDoc = ownerSnap.docs[0]
-        setSession({ role: 'owner', ownerId: ownerDoc.id, identifier, uid: user.uid })
+      const ownerDocSnap = await getDoc(doc(db, 'owners', user.uid))
+      if (ownerDocSnap.exists()) {
+        setSession({ role: 'owner', ownerId: user.uid, identifier, uid: user.uid })
       } else {
         setSession({ role: 'user', identifier, uid: user.uid })
       }
@@ -129,15 +126,31 @@ export function AppProvider({ children }) {
     await guardedWrite(`schedule-${placeId}`, () => patchShop(placeId, { schedule: nextSchedule }))
   }
 
-  // Owner "claims" a real shop found via Places Autocomplete. Creates the
-  // Firestore doc at shops/{place_id} — this IS the link between Google's
-  // data and ours, no separate mapping table needed — then points the
-  // owner's own record at it. `verification` carries the outcome of the
-  // phone-match / form step from ClaimShopSearch (see that component).
-  async function claimShop(ownerId, place, verification = {}) {
+  // Self-serve claim: works for ANY signed-in user, not just pre-seeded
+  // owners. Creates the shop doc (keyed by the real Google place_id — this
+  // IS the link to Google's data) AND the owners/{uid} doc if it doesn't
+  // exist yet, then immediately flips the local session to 'owner' so the
+  // UI updates without needing a page reload.
+  // `scheduleOverride` carries Google's real opening hours when available
+  // (see lib/parseGoogleHours.js) — falls back to a generic default schedule.
+  async function claimShop(place, verification = {}, scheduleOverride = null) {
+    const user = auth.currentUser
+    if (!user) throw new Error('Not signed in')
+    const uid = user.uid
     const placeId = place.place_id
     const lat = typeof place.lat === 'number' ? place.lat : place.geometry?.location?.lat?.()
     const lng = typeof place.lng === 'number' ? place.lng : place.geometry?.location?.lng?.()
+
+    const defaultSchedule = {
+      openTime: '09:00',
+      closeTime: '19:00',
+      hasBreak: false,
+      breaks: [],
+      closedDays: [],
+      confirmGraceMinutes: 15,
+      reminderOffsetsMinutes: [90, 30],
+      is24Hours: false,
+    }
 
     await setDoc(doc(db, 'shops', placeId), {
       name: place.name || '',
@@ -145,39 +158,30 @@ export function AppProvider({ children }) {
       lat: lat ?? null,
       lng: lng ?? null,
       phone: place.formatted_phone_number || '',
-      ownerId,
-      schedule: {
-        openTime: '09:00',
-        closeTime: '19:00',
-        hasBreak: false,
-        breaks: [],
-        closedDays: [],
-        confirmGraceMinutes: 15,
-        reminderOffsetsMinutes: [90, 30],
-        is24Hours: false,
-      },
+      ownerId: uid,
+      schedule: scheduleOverride || defaultSchedule,
       todayOverride: null,
       tomorrowOverride: null,
       confirmedAt: null,
       breakUntil: null,
       customOpenLabel: null,
-      // Verification fields — see components/ClaimShopSearch.jsx for how
-      // these get set. 'auto_approved' shops are live immediately;
-      // 'pending' ones show as unverified to customers until you flip
-      // this to 'verified' in the Firestore console after a manual check.
       verificationStatus: verification.verificationStatus || 'pending',
       ownerName: verification.ownerName || '',
       ownerPhone: verification.ownerPhone || '',
       gstNumber: verification.gstNumber || '',
       verificationNote: verification.verificationNote || '',
+      hoursSource: scheduleOverride ? 'google' : 'default', // for owner-facing "we found your hours" note
     }).catch((err) => { console.error('claimShop: shop create failed:', err); throw err })
 
-    await updateDoc(doc(db, 'owners', ownerId), { shopPlaceId: placeId })
-      .catch((err) => { console.error('claimShop: owner link update failed:', err); throw err })
+    await setDoc(doc(db, 'owners', uid), {
+      email: user.email && !user.email.endsWith(`@${PHONE_AUTH_DOMAIN}`) ? user.email : '',
+      phone: user.email?.endsWith(`@${PHONE_AUTH_DOMAIN}`) ? user.email.split('@')[0] : '',
+      shopPlaceId: placeId,
+    }, { merge: true }).catch((err) => { console.error('claimShop: owner doc failed:', err); throw err })
+
+    setSession((prev) => ({ ...prev, role: 'owner', ownerId: uid }))
   }
 
-  // Saves the browser's FCM device token to the owner's record so a future
-  // scheduled Cloud Function can find where to send reminder pushes.
   async function saveFcmToken(ownerId, token) {
     await updateDoc(doc(db, 'owners', ownerId), { fcmToken: token }).catch((err) => {
       console.error('saveFcmToken failed:', err)
@@ -186,6 +190,16 @@ export function AppProvider({ children }) {
 
   function getOwnerShop(ownerId) {
     return shops.find((s) => s.ownerId === ownerId) || null
+  }
+
+  const isAdmin = !!ADMIN_EMAIL && session?.identifier?.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+
+  function approveShop(placeId) {
+    return patchShop(placeId, { verificationStatus: 'verified' })
+  }
+
+  function rejectShop(placeId) {
+    return patchShop(placeId, { verificationStatus: 'rejected' })
   }
 
   return (
@@ -208,6 +222,9 @@ export function AppProvider({ children }) {
         claimShop,
         saveFcmToken,
         getOwnerShop,
+        isAdmin,
+        approveShop,
+        rejectShop,
       }}
     >
       {children}
