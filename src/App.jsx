@@ -6,6 +6,8 @@ import Login from './screens/Login.jsx'
 import MapHome from './screens/MapHome.jsx'
 import ShopDetails from './screens/ShopDetails.jsx'
 import Profile from './screens/Profile.jsx'
+import AdminPanel from './screens/AdminPanel.jsx'
+import ListShop from './screens/ListShop.jsx'
 
 function Gate({ children }) {
   const { session, authLoading } = useApp()
@@ -23,6 +25,8 @@ function Shell() {
       <Route path="/" element={<Gate><MapHome /></Gate>} />
       <Route path="/shop/:placeId" element={<Gate><ShopDetails /></Gate>} />
       <Route path="/profile" element={<Gate><Profile /></Gate>} />
+      <Route path="/admin" element={<Gate><AdminPanel /></Gate>} />
+      <Route path="/list-shop" element={<Gate><ListShop /></Gate>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
