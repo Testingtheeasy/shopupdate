@@ -1,19 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useApp } from '../AppContext.jsx'
+import { parseGoogleHours } from '../lib/parseGoogleHours.js'
 
-// Multi-step claim flow:
+// Multi-step claim flow (works for ANY signed-in user now, not just
+// pre-seeded owners — see AppContext.claimShop):
 // 1. Search & select the real shop (Google Places Autocomplete)
-// 2. If Google has a phone number on file for that listing, ask the owner
-//    to confirm their number — if it matches, auto-approve instantly.
-// 3. If there's no Google phone to match against, or it doesn't match,
-//    fall through to a short verification form (name, phone, optional GST,
-//    note) — the shop is created immediately so the owner can explore, but
-//    stays "pending" (unverified to customers) until manually approved.
-export default function ClaimShopSearch({ ownerId }) {
+// 2. If Google has a phone number on file, ask the owner to confirm their
+//    number — match = instant auto-approval.
+// 3. Otherwise, a short verification form — shop is created immediately
+//    (owner can explore right away) but stays "pending" until reviewed.
+// Along the way, Google's real opening_hours (if available) pre-fill the
+// schedule instead of a generic default — owner can still edit anytime.
+export default function ClaimShopSearch() {
   const { claimShop } = useApp()
   const inputRef = useRef(null)
-  const [step, setStep] = useState('search') // search | phone_match | form | done
+  const [step, setStep] = useState('search')
   const [place, setPlace] = useState(null)
+  const [scheduleOverride, setScheduleOverride] = useState(null)
   const [phoneInput, setPhoneInput] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -22,19 +25,20 @@ export default function ClaimShopSearch({ ownerId }) {
   useEffect(() => {
     if (!window.google?.maps?.places || !inputRef.current || step !== 'search') return
     const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-      fields: ['place_id', 'name', 'geometry', 'formatted_address', 'formatted_phone_number'],
+      fields: ['place_id', 'name', 'geometry', 'formatted_address', 'formatted_phone_number', 'opening_hours'],
     })
     const listener = autocomplete.addListener('place_changed', () => {
       const p = autocomplete.getPlace()
       if (!p?.place_id) return
       setPlace(p)
+      setScheduleOverride(parseGoogleHours(p.opening_hours))
       setStep(p.formatted_phone_number ? 'phone_match' : 'form')
     })
     return () => window.google.maps.event.removeListener(listener)
   }, [step])
 
   function normalizePhone(p) {
-    return (p || '').replace(/\D/g, '').slice(-10) // last 10 digits, ignores country code formatting
+    return (p || '').replace(/\D/g, '').slice(-10)
   }
 
   async function handlePhoneMatch(e) {
@@ -67,7 +71,7 @@ export default function ClaimShopSearch({ ownerId }) {
   async function submitClaim(verificationStatus, extra) {
     setSubmitting(true)
     try {
-      await claimShop(ownerId, place, { verificationStatus, ...extra })
+      await claimShop(place, { verificationStatus, ...extra }, scheduleOverride)
       setStep('done')
     } catch (err) {
       console.error('claimShop failed:', err)
@@ -77,8 +81,6 @@ export default function ClaimShopSearch({ ownerId }) {
   }
 
   if (step === 'done') {
-    // Parent Profile screen will switch away automatically once the shop
-    // appears in the live shops list — this is just a brief confirmation.
     return (
       <div className="bg-white rounded-xl2 border border-ink/10 p-5 text-center">
         <p className="font-display text-lg font-600 mb-1">Almost there</p>
@@ -95,6 +97,11 @@ export default function ClaimShopSearch({ ownerId }) {
           <p className="text-sm text-ink/60">
             Google has a phone number on file for <b>{place.name}</b>. Enter your number to verify instantly.
           </p>
+          {scheduleOverride && !scheduleOverride.is24Hours && (
+            <p className="text-xs text-accent bg-openBg rounded-lg px-3 py-2 mt-3">
+              We also found hours on Google ({scheduleOverride.openTime}–{scheduleOverride.closeTime}) — we'll pre-fill them, you can edit anytime.
+            </p>
+          )}
         </div>
         <form onSubmit={handlePhoneMatch} className="space-y-3">
           <input
@@ -124,8 +131,13 @@ export default function ClaimShopSearch({ ownerId }) {
           <p className="font-display text-lg font-600 mb-1">Verify your shop</p>
           <p className="text-sm text-ink/60">
             We couldn't auto-verify <b>{place.name}</b> against Google's records. Share a few details —
-            your shop stays visible to you while we review, and goes live to customers once approved.
+            your shop stays visible to you while we review (usually within 24 hours), and goes live to customers once approved.
           </p>
+          {scheduleOverride && !scheduleOverride.is24Hours && (
+            <p className="text-xs text-accent bg-openBg rounded-lg px-3 py-2 mt-3">
+              We also found hours on Google ({scheduleOverride.openTime}–{scheduleOverride.closeTime}) — we'll pre-fill them, you can edit anytime.
+            </p>
+          )}
         </div>
         <form onSubmit={handleFormSubmit} className="space-y-3">
           <input value={form.ownerName} onChange={(e) => setForm({ ...form, ownerName: e.target.value })}
@@ -149,7 +161,6 @@ export default function ClaimShopSearch({ ownerId }) {
     )
   }
 
-  // step === 'search'
   return (
     <div className="bg-white rounded-xl2 border border-ink/10 p-5 text-center">
       <p className="font-display text-lg font-600 mb-1">Link your shop</p>
