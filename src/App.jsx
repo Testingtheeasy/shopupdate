@@ -1,6 +1,7 @@
 import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider, useApp } from './AppContext.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import Login from './screens/Login.jsx'
 import MapHome from './screens/MapHome.jsx'
 import ShopDetails from './screens/ShopDetails.jsx'
@@ -29,10 +30,12 @@ function Shell() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <div className="app-shell max-w-md mx-auto bg-paper text-ink font-body relative overflow-hidden">
-        <Shell />
-      </div>
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <div className="app-shell max-w-md mx-auto bg-paper text-ink font-body relative overflow-hidden">
+          <Shell />
+        </div>
+      </AppProvider>
+    </ErrorBoundary>
   )
 }

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react'
 import {
   collection, onSnapshot, doc, updateDoc, setDoc, query, where, getDocs,
 } from 'firebase/firestore'
@@ -10,10 +10,28 @@ import { db, auth, googleProvider, phoneToPseudoEmail, PHONE_AUTH_DOMAIN } from 
 
 const AppCtx = createContext(null)
 
+// Minimum gap between repeat calls to the same write action — a lightweight,
+// client-side guard against accidental double-taps and basic spam-clicking.
+// This is NOT real server-side rate limiting (that needs Firebase App Check
+// or Cloud Functions) — just a cheap first layer that costs nothing to add.
+const WRITE_COOLDOWN_MS = 1200
+
 export function AppProvider({ children }) {
-  const [session, setSession] = useState(null)     // { role, ownerId?, identifier, uid? } or { role: 'guest' }
+  const [session, setSession] = useState(null)
   const [shops, setShops] = useState([])
   const [authLoading, setAuthLoading] = useState(true)
+  const lastWriteAt = useRef({})
+
+  function guardedWrite(key, fn) {
+    const now = Date.now()
+    const last = lastWriteAt.current[key] || 0
+    if (now - last < WRITE_COOLDOWN_MS) {
+      console.warn(`Write "${key}" throttled — too soon after previous call.`)
+      return Promise.resolve()
+    }
+    lastWriteAt.current[key] = now
+    return fn()
+  }
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -24,14 +42,11 @@ export function AppProvider({ children }) {
     return unsub
   }, [])
 
-  // Resolve role whenever Firebase auth state changes. Handles both:
-  // - Google sign-in (real email) -> look up owners by `email`
-  // - Phone+password sign-in (pseudo-email) -> extract phone -> look up owners by `phone`
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setAuthLoading(false)
-        return // don't clear a guest session here — guests aren't Firebase users
+        return
       }
       const isPseudoPhone = user.email?.endsWith(`@${PHONE_AUTH_DOMAIN}`)
       const lookupField = isPseudoPhone ? 'phone' : 'email'
@@ -53,37 +68,20 @@ export function AppProvider({ children }) {
   }, [])
 
   async function loginWithGoogle() {
-    // Redirect (not popup) — popups are unreliable on mobile browsers and
-    // get silently blocked inside sandboxed preview environments like
-    // StackBlitz/Vercel preview iframes. Redirect navigates away and back,
-    // and onAuthStateChanged above picks up the result automatically.
     await signInWithRedirect(auth, googleProvider)
   }
 
-  // isSignup=true creates a new account; false signs into an existing one.
   async function loginWithPhonePassword(phone, password, isSignup) {
     const pseudoEmail = phoneToPseudoEmail(phone)
-    if (isSignup) {
-      await createUserWithEmailAndPassword(auth, pseudoEmail, password)
-    } else {
-      await signInWithEmailAndPassword(auth, pseudoEmail, password)
-    }
+    if (isSignup) await createUserWithEmailAndPassword(auth, pseudoEmail, password)
+    else await signInWithEmailAndPassword(auth, pseudoEmail, password)
   }
 
-  // Real email + password — distinct from the phone pseudo-email trick above.
   async function loginWithEmailPassword(email, password, isSignup) {
-    if (isSignup) {
-      await createUserWithEmailAndPassword(auth, email, password)
-    } else {
-      await signInWithEmailAndPassword(auth, email, password)
-    }
+    if (isSignup) await createUserWithEmailAndPassword(auth, email, password)
+    else await signInWithEmailAndPassword(auth, email, password)
   }
 
-  // Guest = browse-only, no Firebase auth session at all. Firestore rules
-  // allow public reads, so guests can see the map/pins, but every write
-  // action in the app is only ever wired to owner screens, which guests
-  // can't reach (Gate below still requires a real session to view them —
-  // guest role is only ever routed to the map).
   function continueAsGuest() {
     setSession({ role: 'guest', identifier: 'Guest' })
   }
@@ -98,36 +96,45 @@ export function AppProvider({ children }) {
   }
 
   function confirmOpen(placeId) {
-    return patchShop(placeId, { confirmedAt: Date.now(), todayOverride: null, customOpenLabel: null })
+    return guardedWrite(`confirm-${placeId}`, () =>
+      patchShop(placeId, { confirmedAt: Date.now(), todayOverride: null, customOpenLabel: null })
+    )
   }
 
   function confirmCustomTime(placeId, timeLabel) {
-    return patchShop(placeId, { confirmedAt: Date.now(), todayOverride: null, customOpenLabel: timeLabel })
+    return guardedWrite(`confirm-${placeId}`, () =>
+      patchShop(placeId, { confirmedAt: Date.now(), todayOverride: null, customOpenLabel: timeLabel })
+    )
   }
 
   function setOverride(placeId, which, value) {
-    return patchShop(placeId, which === 'today' ? { todayOverride: value } : { tomorrowOverride: value })
+    return guardedWrite(`override-${placeId}-${which}`, () =>
+      patchShop(placeId, which === 'today' ? { todayOverride: value } : { tomorrowOverride: value })
+    )
   }
 
   function startBreak(placeId, minutes) {
-    return patchShop(placeId, { breakUntil: Date.now() + minutes * 60 * 1000 })
+    return guardedWrite(`break-${placeId}`, () =>
+      patchShop(placeId, { breakUntil: Date.now() + minutes * 60 * 1000 })
+    )
   }
 
   function endBreakNow(placeId) {
-    return patchShop(placeId, { breakUntil: null })
+    return guardedWrite(`break-${placeId}`, () => patchShop(placeId, { breakUntil: null }))
   }
 
   async function updateSchedule(placeId, scheduleUpdates) {
     const shop = shops.find((s) => s.placeId === placeId)
     const nextSchedule = { ...(shop?.schedule || {}), ...scheduleUpdates }
-    await patchShop(placeId, { schedule: nextSchedule })
+    await guardedWrite(`schedule-${placeId}`, () => patchShop(placeId, { schedule: nextSchedule }))
   }
 
   // Owner "claims" a real shop found via Places Autocomplete. Creates the
   // Firestore doc at shops/{place_id} — this IS the link between Google's
   // data and ours, no separate mapping table needed — then points the
-  // owner's own record at it.
-  async function claimShop(ownerId, place) {
+  // owner's own record at it. `verification` carries the outcome of the
+  // phone-match / form step from ClaimShopSearch (see that component).
+  async function claimShop(ownerId, place, verification = {}) {
     const placeId = place.place_id
     const lat = typeof place.lat === 'number' ? place.lat : place.geometry?.location?.lat?.()
     const lng = typeof place.lng === 'number' ? place.lng : place.geometry?.location?.lng?.()
@@ -137,7 +144,7 @@ export function AppProvider({ children }) {
       address: place.formatted_address || place.address || '',
       lat: lat ?? null,
       lng: lng ?? null,
-      phone: '',
+      phone: place.formatted_phone_number || '',
       ownerId,
       schedule: {
         openTime: '09:00',
@@ -147,16 +154,34 @@ export function AppProvider({ children }) {
         closedDays: [],
         confirmGraceMinutes: 15,
         reminderOffsetsMinutes: [90, 30],
+        is24Hours: false,
       },
       todayOverride: null,
       tomorrowOverride: null,
       confirmedAt: null,
       breakUntil: null,
       customOpenLabel: null,
+      // Verification fields — see components/ClaimShopSearch.jsx for how
+      // these get set. 'auto_approved' shops are live immediately;
+      // 'pending' ones show as unverified to customers until you flip
+      // this to 'verified' in the Firestore console after a manual check.
+      verificationStatus: verification.verificationStatus || 'pending',
+      ownerName: verification.ownerName || '',
+      ownerPhone: verification.ownerPhone || '',
+      gstNumber: verification.gstNumber || '',
+      verificationNote: verification.verificationNote || '',
     }).catch((err) => { console.error('claimShop: shop create failed:', err); throw err })
 
     await updateDoc(doc(db, 'owners', ownerId), { shopPlaceId: placeId })
       .catch((err) => { console.error('claimShop: owner link update failed:', err); throw err })
+  }
+
+  // Saves the browser's FCM device token to the owner's record so a future
+  // scheduled Cloud Function can find where to send reminder pushes.
+  async function saveFcmToken(ownerId, token) {
+    await updateDoc(doc(db, 'owners', ownerId), { fcmToken: token }).catch((err) => {
+      console.error('saveFcmToken failed:', err)
+    })
   }
 
   function getOwnerShop(ownerId) {
@@ -181,6 +206,7 @@ export function AppProvider({ children }) {
         endBreakNow,
         updateSchedule,
         claimShop,
+        saveFcmToken,
         getOwnerShop,
       }}
     >
