@@ -64,9 +64,15 @@ export default function ShopDetails() {
         )}
 
         {!shop && (
-          <p className="text-xs text-ink/40 italic">
-            This shop isn't in our verified database yet — status shown is unverified. Only the owner can add live status.
-          </p>
+          <div className="rounded-xl2 border border-accent/25 bg-openBg px-4 py-3.5">
+            <p className="text-sm font-medium text-ink mb-1">Is this your shop?</p>
+            <p className="text-xs text-ink/60 mb-2.5">
+              Add live status so customers know before they visit — takes about a minute.
+            </p>
+            <button onClick={() => navigate('/list-shop')} className="text-sm font-medium text-accent">
+              List it here →
+            </button>
+          </div>
         )}
       </div>
 

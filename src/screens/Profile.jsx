@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useApp } from '../AppContext.jsx'
 import { getDisplayStatus, DISPLAY_META, DISPLAY, reminderClockTimes, isDormantPeriod } from '../lib/statusEngine.js'
 import BottomNav from '../components/BottomNav.jsx'
@@ -8,7 +9,7 @@ import { registerForPush } from '../lib/pushNotifications.js'
 const REMINDER_OFFSET_OPTIONS = [30, 60, 90, 120, 150, 180]
 
 export default function Profile() {
-  const { session, logout, getOwnerShop, saveFcmToken } = useApp()
+  const { session, logout, getOwnerShop, saveFcmToken, isAdmin } = useApp()
   const ownerShop = session.role === 'owner' ? getOwnerShop(session.ownerId) : null
   const isOwner = session.role === 'owner'
   const initial = (session.identifier || '?').trim()[0]?.toUpperCase() || '?'
@@ -44,18 +45,37 @@ export default function Profile() {
 
       <div className="flex-1 overflow-y-auto px-5 space-y-5 pb-24">
         {isOwner ? (
-          ownerShop ? <OwnerPanel shop={ownerShop} /> : <ClaimShopSearch ownerId={session.ownerId} />
-        ) : (
+          ownerShop ? <OwnerPanel shop={ownerShop} /> : <ClaimShopSearch />
+        ) : session.role === 'guest' ? (
           <div className="bg-white rounded-xl2 border border-ink/10 p-4">
-            <p className="text-xs uppercase tracking-wide text-ink/40 font-medium mb-1">Signed in as</p>
-            <p className="text-sm text-ink/80">{session.identifier}</p>
-            <p className="text-sm text-ink/60 mt-3">Saved shops and notification preferences will live here.</p>
+            <p className="text-sm text-ink/60">Sign in with email, phone, or Google to save shops or list your own.</p>
           </div>
+        ) : (
+          <CustomerPanel session={session} isAdmin={isAdmin} />
         )}
       </div>
 
       <BottomNav ownerMode={isOwner} />
     </div>
+  )
+}
+
+function CustomerPanel({ session, isAdmin }) {
+  const navigate = useNavigate()
+
+  return (
+    <>
+      <div className="bg-white rounded-xl2 border border-ink/10 p-4">
+        <p className="text-xs uppercase tracking-wide text-ink/40 font-medium mb-1">Signed in as</p>
+        <p className="text-sm text-ink/80">{session.identifier}</p>
+        <p className="text-sm text-ink/60 mt-3">Saved shops and notification preferences will live here.</p>
+        {isAdmin && (
+          <button onClick={() => navigate('/admin')} className="text-sm font-medium text-accent mt-3">
+            Open admin review →
+          </button>
+        )}
+      </div>
+    </>
   )
 }
 
@@ -331,6 +351,10 @@ function ScheduleCard({ shop, updateSchedule }) {
           {editingSchedule ? 'Done' : 'Edit'}
         </button>
       </div>
+
+      {shop.hoursSource === 'google' && (
+        <p className="text-xs text-ink/40 -mt-2">Pre-filled from your Google Maps listing — edit anytime.</p>
+      )}
 
       {!editingSchedule ? (
         <div className="text-sm text-ink/70 space-y-1">

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../AppContext.jsx'
+import { sendPasswordResetEmail } from 'firebase/auth'
+import { auth } from '../lib/firebase.js'
 
 export default function Login() {
   const { session, authLoading, loginWithGoogle, loginWithEmailPassword, loginWithPhonePassword, continueAsGuest } = useApp()
@@ -12,12 +14,22 @@ export default function Login() {
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [resetSent, setResetSent] = useState(false)
+  const [intentSet, setIntentSet] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const [googleError, setGoogleError] = useState('')
 
   useEffect(() => {
-    if (session) navigate(session.role === 'owner' ? '/profile' : '/', { replace: true })
+    if (session) {
+      const wantsToList = sessionStorage.getItem('shopstatus_list_intent') === '1'
+      sessionStorage.removeItem('shopstatus_list_intent')
+      if (wantsToList && session.role !== 'owner') {
+        navigate('/list-shop', { replace: true })
+      } else {
+        navigate(session.role === 'owner' ? '/profile' : '/', { replace: true })
+      }
+    }
   }, [session, navigate])
 
   async function handleGoogleClick() {
@@ -28,6 +40,23 @@ export default function Login() {
       // Show the raw Firebase error code — this is the exact info needed
       // to diagnose Cloud Console / Firebase Console config mismatches.
       setGoogleError(`${err.code || 'unknown-error'}: ${err.message || err}`)
+    }
+  }
+
+  async function handleForgotPassword() {
+    setError('')
+    if (!email.trim()) {
+      setError('Enter your email above first, then tap "Forgot password?"')
+      return
+    }
+    setSubmitting(true)
+    try {
+      await sendPasswordResetEmail(auth, email.trim())
+      setResetSent(true)
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -76,7 +105,7 @@ export default function Login() {
       <div className="w-full mt-8">
         <button
           onClick={handleGoogleClick}
-          disabled={authLoading}
+          disabled={authLoading || submitting}
           className="w-full flex items-center justify-center gap-3 bg-white border border-ink/15 rounded-xl2 py-3.5 font-medium text-base text-ink shadow-sm active:bg-ink/5 transition-colors disabled:opacity-50"
         >
           <GoogleLogo />
@@ -91,12 +120,12 @@ export default function Login() {
         </div>
 
         <div className="flex rounded-xl overflow-hidden border border-ink/10 mb-4">
-          <button onClick={() => { setMode('email'); setError('') }}
-                  className={`flex-1 py-2 text-sm font-medium ${mode === 'email' ? 'bg-accent text-white' : 'bg-white text-ink/60'}`}>
+          <button disabled={submitting} onClick={() => { setMode('email'); setError('') }}
+                  className={`flex-1 py-2 text-sm font-medium disabled:opacity-50 ${mode === 'email' ? 'bg-accent text-white' : 'bg-white text-ink/60'}`}>
             Email
           </button>
-          <button onClick={() => { setMode('phone'); setError('') }}
-                  className={`flex-1 py-2 text-sm font-medium ${mode === 'phone' ? 'bg-accent text-white' : 'bg-white text-ink/60'}`}>
+          <button disabled={submitting} onClick={() => { setMode('phone'); setError('') }}
+                  className={`flex-1 py-2 text-sm font-medium disabled:opacity-50 ${mode === 'phone' ? 'bg-accent text-white' : 'bg-white text-ink/60'}`}>
             Phone
           </button>
         </div>
@@ -105,16 +134,22 @@ export default function Login() {
           <form onSubmit={handleEmailSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-ink/50 mb-1.5">Email</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={submitting}
                      placeholder="you@example.com"
-                     className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+                     className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent disabled:opacity-50" />
             </div>
             <div>
               <label className="block text-xs font-medium text-ink/50 mb-1.5">Password</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} disabled={submitting}
                      placeholder="Min 6 characters"
-                     className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+                     className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent disabled:opacity-50" />
+              {!isSignup && (
+                <button type="button" disabled={submitting} onClick={handleForgotPassword} className="text-xs text-accent mt-1.5 disabled:opacity-50">
+                  Forgot password?
+                </button>
+              )}
             </div>
+            {resetSent && <p className="text-xs text-open">Reset link sent — check your email.</p>}
             {error && <p className="text-xs text-closed">{error}</p>}
             <button type="submit" disabled={submitting}
                     className="w-full bg-accent text-white rounded-xl2 py-3.5 font-medium text-base disabled:opacity-50">
@@ -127,15 +162,20 @@ export default function Login() {
           <form onSubmit={handlePhoneSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-ink/50 mb-1.5">Phone number</label>
-              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required disabled={submitting}
                      placeholder="98765 43210"
-                     className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+                     className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent disabled:opacity-50" />
             </div>
             <div>
               <label className="block text-xs font-medium text-ink/50 mb-1.5">Password</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} disabled={submitting}
                      placeholder="Min 6 characters"
-                     className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent" />
+                     className="w-full rounded-xl2 border border-ink/15 bg-white px-4 py-3 text-base outline-none focus:border-accent disabled:opacity-50" />
+              {!isSignup && (
+                <p className="text-[11px] text-ink/35 mt-1.5">
+                  Forgot password isn't available for phone accounts yet — this needs SMS OTP verification, planned for later. For now, use Email login if you need self-serve reset.
+                </p>
+              )}
             </div>
             {error && <p className="text-xs text-closed">{error}</p>}
             <button type="submit" disabled={submitting}
@@ -146,7 +186,7 @@ export default function Login() {
         )}
 
         {(mode === 'email' || mode === 'phone') && (
-          <button onClick={() => { setIsSignup((v) => !v); setError('') }} className="w-full text-center text-xs text-ink/50 mt-3">
+          <button disabled={submitting} onClick={() => { setIsSignup((v) => !v); setError('') }} className="w-full text-center text-xs text-ink/50 mt-3 disabled:opacity-50">
             {isSignup ? 'Already have an account? Sign in' : "Don't have an account? Create one"}
           </button>
         )}
@@ -163,6 +203,14 @@ export default function Login() {
         <p className="text-[11px] text-ink/35 mt-1 text-center">
           Browse-only — shop owners must sign in with one of the options above.
         </p>
+
+        <button
+          onClick={() => { sessionStorage.setItem('shopstatus_list_intent', '1'); setIntentSet(true) }}
+          disabled={intentSet}
+          className="w-full text-center text-sm font-medium text-accent py-2 mt-2 border-t border-ink/10 pt-4 disabled:opacity-60"
+        >
+          {intentSet ? '✓ Got it — sign in above to continue' : 'Own a business? List it →'}
+        </button>
       </div>
     </div>
   )
@@ -171,8 +219,13 @@ export default function Login() {
 function friendlyError(err) {
   const code = err?.code || ''
   if (code.includes('email-already-in-use')) return 'An account already exists — try signing in instead.'
-  if (code.includes('user-not-found') || code.includes('invalid-credential')) return 'No account found with those details.'
-  if (code.includes('wrong-password')) return 'Incorrect password.'
+  // Firebase intentionally merges "no account" and "wrong password" into one
+  // generic error (auth/invalid-credential) to prevent attackers from being
+  // able to tell which emails/phones have accounts. We keep that ambiguity
+  // in the message on purpose — it's a security feature, not a bug.
+  if (code.includes('user-not-found') || code.includes('invalid-credential') || code.includes('wrong-password')) {
+    return 'Incorrect email/phone or password. If you don\'t have an account yet, tap "Create one" below.'
+  }
   if (code.includes('weak-password')) return 'Password should be at least 6 characters.'
   return 'Something went wrong. Please try again.'
 }
