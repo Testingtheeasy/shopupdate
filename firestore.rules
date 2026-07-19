@@ -6,7 +6,7 @@ service cloud.firestore {
     // email before publishing these rules — this is the one account allowed
     // to approve/reject pending shop claims from the admin panel.
     function isAdmin() {
-      return request.auth != null && request.auth.token.email == 'ADMIN_EMAIL_PLACEHOLDER';
+      return request.auth != null && request.auth.token.email == 'goodwingowthamraj333@gmail.com';
     }
 
     match /shops/{shopId} {
